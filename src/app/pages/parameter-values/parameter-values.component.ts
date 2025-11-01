@@ -13,6 +13,8 @@ import { CalendarModule } from 'primeng/calendar';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { MessageModule } from 'primeng/message';
 import { MessageService } from 'primeng/api';
+import { TagModule } from 'primeng/tag';
+import { TooltipModule } from 'primeng/tooltip';
 
 interface ParameterValue {
   id: string;
@@ -21,6 +23,10 @@ interface ParameterValue {
   parameterDescription: string;
   dataTypeId: number;
   dataTypeDescription: string;
+  // legacy/master field that sometimes contains JSON list options
+  dataOrigin?: string | null;
+  // new field coming from api/ParameterValues: contains JSON string with list options
+  originValue?: string | null;
   employeeId?: string | null;
   employeeName?: string | null;
   clientId?: string | null;
@@ -29,6 +35,10 @@ interface ParameterValue {
   numericValue?: number | null;
   dateValue?: string | null; // ISO
   emailValue?: string | null;
+  hourValue?: string | null; // Campo específico para horas
+  // audit
+  createdBy?: string | null;
+  creationDate?: string | null;
 }
 
 interface SimpleItem { id: string; name: string }
@@ -48,6 +58,8 @@ interface SimpleItem { id: string; name: string }
     CalendarModule,
     InputNumberModule,
     MessageModule,
+    TagModule,
+    TooltipModule,
   ],
   providers: [MessageService],
   template: `
@@ -70,10 +82,13 @@ interface SimpleItem { id: string; name: string }
                       [formControl]="employeeControl" (onChange)="onEmployeeChange()"></p-dropdown>
         </div>
 
-        
-        <div class="field col-12 md:col-12 flex gap-2 align-items-end">
-          <button pButton label="Buscar" icon="pi pi-search" (click)="loadValues()"></button>
-          <button pButton label="Limpiar" class="p-button-secondary" icon="pi pi-refresh" (click)="clearFilters()"></button>
+        <div class="col-12 flex justify-content-center">
+          <div class="actions-container">
+            <button pButton label="Buscar" icon="pi pi-search" (click)="loadValues()"
+                    class="p-button-sm mr-2"></button>
+            <button pButton label="Limpiar" class="p-button-secondary p-button-sm" 
+                    icon="pi pi-refresh" (click)="clearFilters()"></button>
+          </div>
         </div>
       </div>
 
@@ -100,41 +115,73 @@ interface SimpleItem { id: string; name: string }
       <p-table [value]="values" [paginator]="true" [rows]="pageSize" [first]="first" (onPage)="onPage($event)" [loading]="loading" styleClass="p-datatable-sm">
         <ng-template pTemplate="header">
           <tr>
-            <th style="width:15%">Código</th>
-            <th style="width:25%">Descripción</th>
+            <th style="width:20%">Código</th>
             <th style="width:15%">Empleado</th>
             <th style="width:15%">Cliente</th>
             <th style="width:30%">Valor</th>
+            <th style="width:10%">Creado Por</th>
+            <th style="width:10%">Fecha Creación</th>
           </tr>
         </ng-template>
         <ng-template pTemplate="body" let-row>
           <tr>
             <td><strong>{{row.parameterCode}}</strong></td>
-            <td>{{row.parameterDescription}}</td>
             <td>{{row.employeeName}}</td>
             <td>{{row.clientName}}</td>
             <td>
-              <!-- show data type label with tooltip -->
-              <div class="datatype-label" title="Tipo de dato: {{ row.dataTypeDescription }}">{{ row.dataTypeDescription }}</div>
+              <div class="control-container">
+                <!-- show data type label with tooltip -->
+                <div class="type-label">{{row.dataTypeDescription}}</div>
 
-              <ng-container [ngSwitch]="getTypeKey(row)">
+                <ng-container [ngSwitch]="getTypeKey(row)">
                 <ng-container *ngSwitchCase="'texto'">
-                  <input pInputText [formControl]="getControl(row.id)" />
+                  <input pInputText [formControl]="getControl(row.id)" 
+                         [pTooltip]="'Tipo Dato a Ingresar: ' + row.dataTypeDescription" />
                 </ng-container>
                 <ng-container *ngSwitchCase="'fecha'">
-                  <p-calendar [formControl]="getControl(row.id)" dateFormat="yy-mm-dd" [showIcon]="true"></p-calendar>
+                  <p-calendar [formControl]="getControl(row.id)" dateFormat="yy-mm-dd" [showIcon]="true"
+                            [pTooltip]="'Tipo Dato a Ingresar: ' + row.dataTypeDescription"></p-calendar>
+                </ng-container>
+                <ng-container *ngSwitchCase="'hora'">
+                  <p-calendar [formControl]="getControl(row.id)"
+                            [timeOnly]="true"
+                            [showIcon]="true"
+                            [showTime]="true"
+                            [showSeconds]="false"
+                            icon="pi pi-clock"
+                            [pTooltip]="'Seleccione hora y minutos'"
+                            [style]="{'width': '130px'}"
+                            hourFormat="24"></p-calendar>
                 </ng-container>
                 <ng-container *ngSwitchCase="'correo'">
-                  <input pInputText type="email" [formControl]="getControl(row.id)" />
+                  <input pInputText type="email" [formControl]="getControl(row.id)"
+                         [pTooltip]="'Tipo Dato a Ingresar: ' + row.dataTypeDescription" />
+                </ng-container>
+                <ng-container *ngSwitchCase="'lista'">
+                  <div class="value-container">
+                    <p-dropdown [options]="getListOptions(row.id)"
+                              [formControl]="getControl(row.id)"
+                              optionLabel="label"
+                              [optionValue]="'value'"
+                              [placeholder]="'Seleccione...'"
+                              appendTo="body"
+                              [style]="{'width': '180px'}"
+                              pTooltip="Seleccione una opción de la lista"
+                              styleClass="lista-dropdown">
+                    </p-dropdown>                   
+                  </div>
                 </ng-container>
                 <ng-container *ngSwitchCase="'numerico'">
-                  <p-inputNumber [formControl]="getControl(row.id)" [useGrouping]="false"></p-inputNumber>
+                  <p-inputNumber [formControl]="getControl(row.id)" [useGrouping]="false"
+                               [pTooltip]="'Tipo Dato a Ingresar: ' + row.dataTypeDescription"></p-inputNumber>
                 </ng-container>
                 <ng-container *ngSwitchDefault>
                   <!-- fallback to text -->
-                  <input pInputText [formControl]="getControl(row.id)" />
+                  <input pInputText [formControl]="getControl(row.id)"
+                         [pTooltip]="'Tipo Dato a Ingresar: ' + row.dataTypeDescription" />
                 </ng-container>
               </ng-container>
+              </div>
 
               <!-- validation messages -->
               <div class="validation-messages">
@@ -142,21 +189,44 @@ interface SimpleItem { id: string; name: string }
                 <small class="p-error" *ngIf="getControl(row.id).touched && getControl(row.id).errors?.['pattern']">Ingrese un número válido</small>
               </div>
             </td>
+            <td>{{ row.createdBy || '-' }}</td>
+            <td>{{ row.creationDate | date: 'yyyy-MM-dd HH:mm' }}</td>
           </tr>
         </ng-template>
       </p-table>
 
       <div class="mt-3 flex gap-2 justify-content-end">
         <button pButton label="Guardar" icon="pi pi-save" (click)="saveAll()"></button>
-        <button pButton label="Limpiar valores" class="p-button-secondary" icon="pi pi-times" (click)="resetValues()"></button>
+        <!--<button pButton label="Limpiar valores" class="p-button-secondary" icon="pi pi-times" (click)="resetValues()"></button>-->
       </div>
     </p-card>
   `,
   styles: [`
     .filters { margin-bottom: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 6px; }
     :host ::ng-deep .p-card .p-card-title { font-size: 1.25rem; }
-    .datatype-label { font-size: 0.8rem; color: #444; margin-bottom: 0.25rem; }
+    .type-label { 
+      color: #666;
+      font-size: 0.75rem;
+      margin-bottom: 0.25rem;
+    }
+    .control-container {
+      display: flex;
+      flex-direction: column;
+    }
     .validation-messages small { display:block; margin-top: 0.25rem; }
+    .actions-container {
+      width: auto;
+      display: inline-flex;
+      gap: 0.5rem;
+      padding: 1rem 0;
+    }
+    :host ::ng-deep .p-button.p-button-sm {
+      font-size: 0.875rem;
+      padding: 0.4rem 0.8rem;
+    }
+    .actions-container .p-button {
+      min-width: 100px;
+    }
   `]
 })
 export class ParameterValuesComponent implements OnInit, OnDestroy {
@@ -166,6 +236,8 @@ export class ParameterValuesComponent implements OnInit, OnDestroy {
   values: ParameterValue[] = [];
   loading = false;
   errorMessage = '';
+  // parsed list options for parameters of type 'lista'
+  listOptions = new Map<string, Array<{ label: string; value: any }>>();
   // pagination
   pageSize = 10;
   first = 0;
@@ -345,6 +417,7 @@ export class ParameterValuesComponent implements OnInit, OnDestroy {
 
   initControls() {
     this.valueControls.clear();
+    this.listOptions.clear();
     for (const v of this.values) {
       // pick initial value depending on available value fields
       let initial: any = null;
@@ -356,9 +429,80 @@ export class ParameterValuesComponent implements OnInit, OnDestroy {
         initial = v.numericValue ?? null;
       } else if (typeKey === 'fecha') {
         initial = v.dateValue ? new Date(v.dateValue) : null;
+      } else if (typeKey === 'hora') {
+        console.debug('[ParameterValues] Processing hora type:', {
+          parameterCode: v.parameterCode,
+          textValue: v.textValue,
+          hourValue: v.hourValue
+        });
+        
+        const timeString = v.hourValue ?? v.textValue;
+
+        if (timeString) {
+          // Formato esperado: "HH:mm:ss"
+          const [hours, minutes] = timeString.split(':');  // Tomar solo las horas y minutos
+          const date = new Date();
+          date.setHours(Number(hours) || 0, Number(minutes) || 0, 0);
+          initial = date;
+          console.debug('[ParameterValues] Successfully parsed time:', {
+            original: timeString,
+            hours: Number(hours),
+            minutes: Number(minutes),
+            result: date,
+            formatted: `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
+          });
+        } else {
+          console.debug('[ParameterValues] No time value found for parameter:', v.parameterCode);
+          initial = null;
+        }
       } else if (typeKey === 'correo') {
         // some APIs may use textValue for emails
         initial = v.emailValue ?? v.textValue ?? '';
+      } else if (typeKey === 'lista') {
+        try {
+          // 1. Obtener y parsear las opciones del JSON
+          const originJson = v.originValue ?? v.dataOrigin;
+          let raw = [];
+          try {
+            raw = originJson ? JSON.parse(originJson) : [];
+          } catch (parseError) {
+            console.warn('Error parsing JSON:', originJson);
+            raw = [];
+          }
+          console.debug(`[ParameterValues] Parameter ${v.parameterCode}:`, {
+            textValue: v.textValue,
+            originJson,
+            parsed: raw
+          });
+
+          // 2. Convertir a formato dropdown y guardar opciones
+          const opts: Array<{ label: string; value: any }> = Array.isArray(raw) 
+            ? raw.map(e => ({ 
+                label: String(e.Valor ?? ''), 
+                value: String(e.Id ?? '') 
+              }))
+            : [];
+          this.listOptions.set(v.id, opts);
+
+          // 3. Seleccionar valor inicial - el textValue contiene el Id que queremos seleccionar
+          const targetId = String(v.textValue ?? '');
+          console.debug(`[ParameterValues] Looking for Id "${targetId}" in options:`, opts);
+
+          // Buscar la opción que tenga ese Id
+          initial = targetId;
+
+          // Verificar que el Id existe en las opciones
+          const exists = opts.some(opt => String(opt.value) === targetId);
+          if (!exists && targetId) {
+            console.warn(`[ParameterValues] Warning: Id "${targetId}" not found in options for parameter ${v.parameterCode}`);
+          } else if (exists) {
+            console.debug(`[ParameterValues] Found matching Id "${targetId}" in options`);
+          }
+        } catch (ex) {
+          // invalid JSON -> fallback to plain text
+          console.warn('Invalid originValue/dataOrigin JSON for parameter', v.parameterCode, ex);
+          initial = v.textValue ?? null;
+        }
       } else {
         initial = v.textValue ?? v.numericValue ?? v.dateValue ?? '';
       }
@@ -371,6 +515,7 @@ export class ParameterValuesComponent implements OnInit, OnDestroy {
         // allow integers and decimals (positive/negative)
         validators.push(Validators.pattern(/^[-+]?\d*(?:[\.,]\d+)?$/));
       }
+      // no special validators for 'lista' beyond required if desired in future
 
       this.valueControls.set(v.id, new FormControl(initial, validators));
     }
@@ -386,11 +531,18 @@ export class ParameterValuesComponent implements OnInit, OnDestroy {
   getTypeKey(v: ParameterValue): string {
     const raw = v.dataTypeDescription || '';
     const normalized = this.stripDiacritics(raw);
+    if (normalized.includes('hora') || normalized.includes('time')) return 'hora';
     if (normalized.includes('texto')) return 'texto';
     if (normalized.includes('numer')) return 'numerico';
     if (normalized.includes('fecha') || normalized.includes('date')) return 'fecha';
     if (normalized.includes('correo') || normalized.includes('email')) return 'correo';
+    if (normalized.includes('lista') || normalized.includes('list')) return 'lista';
     return 'texto';
+  }
+
+  // helper to retrieve parsed list options for a given parameter value id
+  getListOptions(id: string) {
+    return this.listOptions.get(id) || [];
   }
 
   // Return existing FormControl for id or create a new one (guarantee non-undefined for template)
@@ -421,11 +573,41 @@ export class ParameterValuesComponent implements OnInit, OnDestroy {
         dto.textValue = raw ?? null;
       } else if (typeKey === 'fecha') {
         dto.dateValue = raw ? (raw instanceof Date ? raw.toISOString() : raw) : null;
+      } else if (typeKey === 'hora') {
+        if (raw instanceof Date) {
+          // Formatear como HH:mm:ss
+          const timeValue = raw.getHours().toString().padStart(2, '0') + ':' + 
+                          raw.getMinutes().toString().padStart(2, '0') + ':00';
+          dto.hourValue = timeValue;  // Usar hourValue en lugar de textValue
+          console.debug('[ParameterValues] Saving time:', {
+            date: raw,
+            formatted: timeValue
+          });
+        } else {
+          dto.hourValue = raw ?? null;
+        }
       } else if (typeKey === 'correo') {
         dto.emailValue = raw ?? null;
       } else if (typeKey === 'numerico') {
         // ensure number or null
         dto.numericValue = raw != null && raw !== '' ? Number(raw) : null;
+      } else if (typeKey === 'lista') {
+        // store selected list option: prefer numericValue when option value is numeric, and also set textValue to the label
+        const opts = this.listOptions.get(v.id) || [];
+        const selected = opts.find(o => String(o.value) === String(raw));
+        if (selected) {
+          const num = Number(selected.value);
+          if (!isNaN(num) && String(selected.value).trim() !== '') {
+            dto.numericValue = num;
+            dto.textValue = String(selected.label);
+          } else {
+            dto.textValue = String(selected.label ?? selected.value);
+          }
+        } else {
+          // fallback: store as text or numeric depending on raw
+          if (raw != null && raw !== '' && !isNaN(Number(raw))) dto.numericValue = Number(raw);
+          else dto.textValue = raw ?? null;
+        }
       } else {
         dto.textValue = raw ?? null;
       }

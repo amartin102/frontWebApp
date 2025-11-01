@@ -14,6 +14,8 @@ import { MessageService } from 'primeng/api';
 interface MasterParameter {
   id: string;
   code: string;
+  // new fields from API
+  description?: string | null;
   // API returns `dataTypeId` / `dataTypeDescription` (camelCase T)
   dataTypeId: number;
   dataTypeDescription: string;
@@ -24,6 +26,8 @@ interface MasterParameter {
   createdBy: string;
   // API uses `creationDate`
   creationDate: string;
+  // origin (may be null)
+  dataOrigin?: string | null;
 }
 
 @Component({
@@ -76,23 +80,26 @@ interface MasterParameter {
         [tableStyle]="{'min-width': '60rem'}">
         <ng-template pTemplate="header">
           <tr>
-            <th style="width: 15%">Código</th>
-            <th style="width: 15%">Tipo Dato</th>
-            <th style="width: 15%">Nivel Inconsistencia</th>
-            <th style="width: 15%">Permiso Modificar</th>
-            <th style="width: 15%">Permiso Consultar</th>
-            <th style="width: 15%">Creado Por</th>
-            <th style="width: 10%">Acciones</th>
+            <th style="width: 12%">Código</th>
+            <th style="width: 20%">Descripción</th>
+            <th style="width: 12%">Tipo Dato</th>
+            <th style="width: 10%">Origen</th>
+            <th style="width: 12%">Nivel Inconsistencia</th>
+            <th style="width: 10%">Permiso Modificar</th>
+            <th style="width: 10%">Permiso Consultar</th>
+            <th style="width: 10%">Creado Por</th>
+            <th style="width: 12%">Fecha Creación</th>
+            <th style="width: 8%">Acciones</th>
           </tr>
         </ng-template>
         <ng-template pTemplate="body" let-param>
           <tr>
             <td><strong>{{ param.code }}</strong></td>
+            <td>{{ param.description || '-' }}</td>
             <td>
-              <span class="data-type-badge">
-            {{ param.dataTypeDescription }}
-              </span>
+              <span class="data-type-badge">{{ param.dataTypeDescription }}</span>
             </td>
+            <td>{{ param.dataOrigin || '-' }}</td>
             <td>
               <span [class]="'inconsistency-badge level-' + param.inconsistencyLevelId">
                 {{ param.inconsistencyLevelDescription }}
@@ -101,11 +108,12 @@ interface MasterParameter {
             <td>{{ param.modifyPermission }}</td>
             <td>{{ param.consultPermission }}</td>
             <td>{{ param.createdBy }}</td>
+            <td>{{ param.creationDate | date: 'yyyy-MM-dd HH:mm' }}</td>
             <td>
               <div class="flex gap-1">
-                <button pButton icon="pi pi-pencil" class="p-button-warning p-button-sm" 
+                  <button pButton icon="pi pi-pencil" class="p-button-outlined p-button-sm p-button-info" 
                         (click)="editParameter(param)" pTooltip="Editar" tooltipPosition="top"></button>
-                <button pButton icon="pi pi-trash" class="p-button-danger p-button-sm" 
+                  <button pButton icon="pi pi-trash" class="p-button-outlined p-button-sm p-button-danger" 
                         (click)="deleteParameter(param)" pTooltip="Eliminar" tooltipPosition="top"></button>
               </div>
             </td>
@@ -113,7 +121,7 @@ interface MasterParameter {
         </ng-template>
         <ng-template pTemplate="emptymessage">
           <tr>
-            <td colspan="7" class="text-center p-4">
+            <td colspan="10" class="text-center p-4">
               <i class="pi pi-inbox" style="font-size: 2rem; color: #ccc;"></i>
               <p class="mt-2 text-color-secondary">No se encontraron parámetros</p>
             </td>
@@ -121,7 +129,7 @@ interface MasterParameter {
         </ng-template>
         <ng-template pTemplate="loadingbody">
           <tr>
-            <td colspan="7" class="text-center p-4">
+            <td colspan="10" class="text-center p-4">
               <i class="pi pi-spin pi-spinner" style="font-size: 2rem;"></i>
               <p class="mt-2 text-color-secondary">Cargando parámetros...</p>
             </td>

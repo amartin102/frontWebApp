@@ -3,8 +3,13 @@ import { authGuard } from './guards/auth.guard';
 
 export const routes: Routes = [
     { 
-        path: '', 
+        path: 'login', 
         loadComponent: () => import('./pages/login/login.component').then(m => m.LoginComponent) 
+    },
+    { 
+        path: '', 
+        redirectTo: 'login', 
+        pathMatch: 'full' 
     },
     {
         path: 'layout',
@@ -16,7 +21,7 @@ export const routes: Routes = [
             // { path: 'parameters_values', loadComponent: () => import('./pages/parameters/parameters_values/parameter_values.component').then(m => m.ParameterValuesComponent) },
             
             // Redirección cuando está vacío el path
-            { path: '', redirectTo: 'login', pathMatch: 'full' }
+            { path: '', redirectTo: 'parameters/master', pathMatch: 'full' }
         ]
     },
     // Ruta comodín para rutas no encontradas
