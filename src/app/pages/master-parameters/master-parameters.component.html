@@ -1,1 +1,131 @@
-<p>master-parameters works!</p>
+<div class="container-fluid">
+  <h2>Maestro de Parámetros</h2>
+  
+  <div class="d-flex mb-3 gap-3 align-items-center">
+    <div class="flex-grow-1">
+      <div class="input-group" style="max-width: 400px;">
+        <span class="input-group-text">Código Parámetro</span>
+        <input type="text" class="form-control" placeholder="Buscar por código...">
+      </div>
+    </div>
+    <div class="d-flex gap-2">
+      <button type="button" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-circle"></i> Agregar Parámetro
+      </button>
+      <button type="button" class="btn btn-secondary btn-sm">
+        <i class="bi bi-arrow-clockwise"></i> Limpiar Filtros
+      </button>
+      
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-striped table-hover">
+      <thead class="table-light">
+        <tr>
+          <th>Código</th>
+          <th>Descripcióddddn</th>
+          <th>Tipo Dato</th>
+          <th>Origen</th>
+          <th>Nivel Inconsistencia</th>
+          <th>Permiso Modificar</th>
+          <th>Permiso Consultar</th>
+          <th>Creado Por</th>
+          <th>Fecha Creación</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>CorreoEmisorEnvioColilla</td>
+          <td>CorreoEmisorEnvioColillasNomina</td>
+          <td><span class="badge bg-secondary">Email</span></td>
+          <td>-</td>
+          <td><span class="badge bg-warning">Cliente</span></td>
+          <td>ModificarParametros</td>
+          <td>ConsultarParametros</td>
+          <td>Admin</td>
+          <td>2025-10-31 00:34</td>
+          <td>
+            <button class="btn btn-sm btn-outline-primary me-1">
+              <i class="bi bi-pencil"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-danger">
+              <i class="bi bi-trash"></i>
+            </button>
+          </td>
+        </tr>
+        <tr>
+          <td>FinJornadaNocturna</td>
+          <td>Hora fin de la jornada nocturna</td>
+          <td><span class="badge bg-info">Hora</span></td>
+          <td>-</td>
+          <td><span class="badge bg-success">General</span></td>
+          <td>ModificarParametros</td>
+          <td>ConsultarParametros</td>
+          <td>Admin</td>
+          <td>2025-10-31 00:34</td>
+          <td>
+            <button class="btn btn-sm btn-outline-primary me-1">
+              <i class="bi bi-pencil"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-danger">
+              <i class="bi bi-trash"></i>
+            </button>
+          </td>
+        </tr>
+        <tr>
+          <td>ValorSalarioBase</td>
+          <td>El valor del salario mínimo legal vigente</td>
+          <td><span class="badge bg-primary">Numérico</span></td>
+          <td>-</td>
+          <td><span class="badge bg-danger">Empleado</span></td>
+          <td>ModificarParametros</td>
+          <td>ConsultarParametros</td>
+          <td>Admin</td>
+          <td>2025-10-31 00:34</td>
+          <td>
+            <button class="btn btn-sm btn-outline-primary me-1">
+              <i class="bi bi-pencil"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-danger">
+              <i class="bi bi-trash"></i>
+            </button>
+          </td>
+        </tr>
+        <!-- Agregar más filas según sea necesario -->
+      </tbody>
+    </table>
+  </div>
+
+  <nav aria-label="Paginación">
+    <ul class="pagination justify-content-center">
+      <li class="page-item">
+        <a class="page-link" href="#" aria-label="Primera">
+          <span aria-hidden="true">&laquo;&laquo;</span>
+        </a>
+      </li>
+      <li class="page-item">
+        <a class="page-link" href="#" aria-label="Anterior">
+          <span aria-hidden="true">&laquo;</span>
+        </a>
+      </li>
+      <li class="page-item active"><a class="page-link" href="#">1</a></li>
+      <li class="page-item"><a class="page-link" href="#">2</a></li>
+      <li class="page-item"><a class="page-link" href="#">3</a></li>
+      <li class="page-item"><a class="page-link" href="#">4</a></li>
+      <li class="page-item">
+        <a class="page-link" href="#" aria-label="Siguiente">
+          <span aria-hidden="true">&raquo;</span>
+        </a>
+      </li>
+      <li class="page-item">
+        <a class="page-link" href="#" aria-label="Última">
+          <span aria-hidden="true">&raquo;&raquo;</span>
+        </a>
+      </li>
+    </ul>
+  </nav>
+
+  <p class="text-muted">Mostrando 33 de 33 parámetros</p>
+</div>

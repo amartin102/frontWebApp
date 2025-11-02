@@ -151,6 +151,10 @@ interface MasterParameter {
       border-radius: 6px;
     }
 
+    :host ::ng-deep .p-button {
+      min-width: 120px;
+    }
+
     .data-type-badge {
       padding: 0.25rem 0.75rem;
       border-radius: 16px;
