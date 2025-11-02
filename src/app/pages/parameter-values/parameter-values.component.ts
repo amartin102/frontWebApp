@@ -12,9 +12,11 @@ import { DropdownModule } from 'primeng/dropdown';
 import { CalendarModule } from 'primeng/calendar';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { MessageModule } from 'primeng/message';
-import { MessageService } from 'primeng/api';
+import { MessageService, ConfirmationService } from 'primeng/api';
 import { TagModule } from 'primeng/tag';
 import { TooltipModule } from 'primeng/tooltip';
+import { ConfirmDialog, ConfirmDialogModule } from 'primeng/confirmdialog';
+import { ToastModule } from 'primeng/toast';
 
 interface ParameterValue {
   id: string;
@@ -60,9 +62,19 @@ interface SimpleItem { id: string; name: string }
     MessageModule,
     TagModule,
     TooltipModule,
+    ConfirmDialogModule,
+    ToastModule,
   ],
-  providers: [MessageService],
+  providers: [MessageService, ConfirmationService],
   template: `
+    <p-toast position="top-right"></p-toast>
+    
+    <p-confirmDialog header="Confirmación" 
+                    icon="pi pi-exclamation-triangle"
+                    acceptLabel="Sí, guardar"
+                    rejectLabel="No, cancelar">
+    </p-confirmDialog>
+    
     <p-card header="Valores Parámetros">
       <div class="filters p-fluid grid">
         <div class="field col-12 md:col-4">
@@ -196,7 +208,7 @@ interface SimpleItem { id: string; name: string }
       </p-table>
 
       <div class="mt-3 flex gap-2 justify-content-end">
-        <button pButton label="Guardar" icon="pi pi-save" (click)="saveAll()"></button>
+        <button pButton label="Guardar" icon="pi pi-save" (click)="onSaveClick()"></button>
         <!--<button pButton label="Limpiar valores" class="p-button-secondary" icon="pi pi-times" (click)="resetValues()"></button>-->
       </div>
     </p-card>
@@ -266,7 +278,12 @@ export class ParameterValuesComponent implements OnInit, OnDestroy {
   private clientsUrl = `${this.baseApi}/Clients`;
   private valuesUrl = `${this.baseApi}/ParameterValues`;
 
-  constructor(private fb: FormBuilder, private http: HttpClient, private messageService: MessageService) {
+  constructor(
+    private fb: FormBuilder, 
+    private http: HttpClient, 
+    private messageService: MessageService,
+    private confirmationService: ConfirmationService
+  ) {
     this.filterForm = this.fb.group({
       code: [''],
       employee: [null],
@@ -555,13 +572,24 @@ export class ParameterValuesComponent implements OnInit, OnDestroy {
     return c;
   }
 
-  saveAll() {
+  onSaveClick() {
     // quick validation: if any control is invalid, stop and notify
     const hasInvalid = Array.from(this.valueControls.values()).some(c => c.invalid);
     if (hasInvalid) {
       this.messageService.add({ severity: 'error', summary: 'Error', detail: 'Hay valores inválidos. Corrija antes de guardar.', life: 5000 });
       return;
     }
+
+    this.confirmationService.confirm({
+      message: '¿Está seguro que desea guardar todos los valores?',
+      accept: () => {
+        this.saveAll();
+      }
+    });
+  }
+
+  saveAll() {
+    console.debug('[ParameterValues] saveAll called');
 
     // collect payload: for each value, determine field by type
   const payload = this.values.map((v: ParameterValue) => {
@@ -614,8 +642,22 @@ export class ParameterValuesComponent implements OnInit, OnDestroy {
       return dto;
     });
 
-    // send to backend (assume endpoint accepts array POST)
-    this.http.post(this.valuesUrl, payload).subscribe({
+    console.log('[ParameterValues] Original payload:', payload[0]);
+
+    // Formatear el payload según la estructura requerida por el servicio
+    const formattedPayload = payload.map(item => ({
+      id: item.id,
+      textValue: item.textValue || "",
+      numericValue: item.numericValue || 0,
+      dateValue: item.dateValue || new Date().toISOString(),
+      hourValue: item.hourValue || "",
+      modifiedBy: "Prueba" // Ajustar según el usuario actual
+    }));
+
+    console.log('[ParameterValues] Formatted payload:', formattedPayload);
+    
+    // Enviar el payload formateado al servicio como un array
+    this.http.put(`${this.valuesUrl}`, formattedPayload).subscribe({
       next: () => {
         this.messageService.add({ severity: 'success', summary: 'Guardado', detail: 'Valores guardados correctamente', life: 3000 });
       },
@@ -626,6 +668,90 @@ export class ParameterValuesComponent implements OnInit, OnDestroy {
     });
   }
 
+  saveValue(row: ParameterValue) {
+    console.debug('[ParameterValues] saveValue called for row:', row);
+    const control = this.getControl(row.id);
+    if (!control) return;
+
+    const value = control.value;
+    if (value === null || value === undefined) {
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Error',
+        detail: 'El valor es requerido'
+      });
+      return;
+    }
+
+    // Crear el payload con la estructura completa y valores por defecto
+    const payload = [{
+      id: row.id,
+      textValue: "",
+      numericValue: 0,
+      dateValue: "",
+      hourValue: "",
+      modifiedBy: "Admin"
+    }];
+
+    // Asignar el valor según el tipo
+    const tipo = row.dataTypeDescription?.toLowerCase() || '';
+
+    console.log('Tipo de dato:', tipo);
+    console.log('Valor a guardar:', value);
+    // Asignar el valor correspondiente manteniendo el resto con valores por defecto
+    if (tipo.includes('numerico') || tipo.includes('entero') || tipo.includes('decimal')) {
+      payload[0].numericValue = parseFloat(value) || 0;
+    } else if (tipo.includes('fecha')) {
+      payload[0].dateValue = value instanceof Date ? value.toISOString() : value;
+    } else if (tipo.includes('hora')) {
+      payload[0].hourValue = value instanceof Date ? 
+        `${value.getHours().toString().padStart(2, '0')}:${value.getMinutes().toString().padStart(2, '0')}` : 
+        value;
+    } else {
+      // Por defecto, guardar como texto (incluye listas)
+      payload[0].textValue = value?.toString() || "";
+    }
+
+    console.log('Payload final:', payload);
+
+    this.confirmationService.confirm({
+      message: '¿Está seguro que desea guardar este valor?',
+      header: 'Confirmar Guardado',
+      icon: 'pi pi-exclamation-triangle',
+      accept: () => {
+        this.loading = true;
+        this.http.put(`${this.valuesUrl}/${payload[0].id}`, payload).subscribe({
+          next: (response) => {
+            // El código 204 indica éxito
+            this.confirmationService.confirm({
+              message: 'Datos guardados correctamente.',
+              header: 'Operación Exitosa',
+              icon: 'pi pi-check-circle',
+              acceptVisible: true,
+              rejectVisible: false,
+              acceptLabel: 'OK',
+              accept: () => {
+                this.loadValues(); // Recargar los valores después de que el usuario vea el mensaje
+              }
+            });
+          },
+          error: (error) => {
+            console.error('Error al guardar:', error);
+            this.messageService.add({
+              severity: 'error',
+              summary: 'Error',
+              detail: 'Error al actualizar el valor',
+              life: 5000
+            });
+          },
+          complete: () => {
+            this.loading = false;
+          }
+        });
+      }
+    });
+  }
+  
   resetValues() {
     for (const [id, ctrl] of this.valueControls) {
       ctrl.reset();
@@ -642,3 +768,4 @@ export class ParameterValuesComponent implements OnInit, OnDestroy {
     this.loadValues();
   }
 }
+  
