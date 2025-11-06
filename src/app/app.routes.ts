@@ -18,6 +18,7 @@ export const routes: Routes = [
         children: [
              { path: 'parameters/master', loadComponent: () => import('./pages/master-parameters/master-parameters.component').then(x=> x.MasterParametersComponent)},
             { path: 'parameters/values', loadComponent: () => import('./pages/parameter-values/parameter-values.component').then(x=> x.ParameterValuesComponent)},
+            { path: 'shifts/manage', loadComponent: () => import('./pages/manage-shifts/manage-shifts.component').then(x=> x.ManageShiftsComponent)},
             // { path: 'parameters_values', loadComponent: () => import('./pages/parameters/parameters_values/parameter_values.component').then(m => m.ParameterValuesComponent) },
             
             // Redirección cuando está vacío el path

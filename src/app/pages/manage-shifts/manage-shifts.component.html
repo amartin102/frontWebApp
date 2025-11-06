@@ -1,0 +1,214 @@
+<p-card header="Administrar Turnos">
+  <!-- Filtros -->
+  <div class="filters p-fluid grid">
+    <!-- Filtro de Rango de Fechas -->
+    <div class="field col-12 md:col-4">
+      <label for="dateRange">Rango de Fechas</label>
+      <p-calendar 
+        id="dateRange"
+        [formControl]="dateRangeControl"
+        selectionMode="range"
+        [readonlyInput]="true"
+        dateFormat="dd/mm/yy"
+        placeholder="Seleccione rango de fechas"
+        [showIcon]="true"
+      ></p-calendar>
+    </div>
+
+    <!-- Filtro de Cliente -->
+    <div class="field col-12 md:col-4">
+      <label for="client">Cliente</label>
+      <p-dropdown 
+        id="client"
+        [formControl]="clientControl"
+        [options]="clients"
+        optionLabel="name"
+        optionValue="id"
+        placeholder="Seleccione un cliente"
+        [showClear]="true"
+        [filter]="true"
+        filterBy="name"
+      ></p-dropdown>
+    </div>
+
+    <!-- Filtro de Empleado -->
+    <div class="field col-12 md:col-4">
+      <label for="employee">Empleados</label>
+      <p-multiSelect 
+        id="employee"
+        [formControl]="employeeControl"
+        [options]="employees"
+        optionLabel="name"
+        optionValue="id"
+        placeholder="Seleccione empleados"
+        [filter]="true"
+        filterBy="name"
+        [disabled]="!clientControl.value"
+        display="chip"
+        [showClear]="true"
+      ></p-multiSelect>
+      <small *ngIf="!clientControl.value" class="text-muted">Primero seleccione un cliente</small>
+    </div>
+
+    <!-- Botones de Acción -->
+    <div class="field col-12 flex justify-content-end gap-2">
+      <button pButton icon="pi pi-plus" label="Agregar Turno" class="p-button-success" (click)="addShift()"></button>
+      <button pButton icon="pi pi-search" label="Buscar" class="p-button-primary" (click)="search()"></button>
+      <button pButton icon="pi pi-filter-slash" label="Limpiar" class="p-button-secondary" (click)="clearFilters()"></button>
+    </div>
+  </div>
+
+  <!-- Mensajes -->
+  <p-message *ngIf="errorMessage" severity="error" [text]="errorMessage"></p-message>
+
+  <!-- Calendario de Turnos -->
+  <div class="calendar-container">
+    <div *ngIf="!clientControl.value" class="empty-state">
+      <i class="pi pi-info-circle" style="font-size: 3rem; color: #6c757d;"></i>
+      <p class="mt-3" style="font-size: 1.1rem; color: #6c757d;">Seleccione un cliente para ver los turnos</p>
+    </div>
+    <full-calendar #calendar *ngIf="clientControl.value" [options]="calendarOptions"></full-calendar>
+  </div>
+</p-card>
+
+<!-- Modal para Agregar Turno -->
+<p-dialog 
+  [header]="isEditMode() ? 'Editar Turno' : 'Agregar Turno'" 
+  [(visible)]="displayShiftDialog" 
+  [modal]="true"
+  [style]="{width: '600px'}"
+  [draggable]="false"
+  [resizable]="false">
+  
+  <!-- Mensaje cuando no hay cliente seleccionado -->
+  <div *ngIf="!clientControl.value" class="alert-info">
+    <p-message severity="info" text="Debe seleccionar un cliente en los filtros antes de agregar un turno"></p-message>
+  </div>
+
+  <form [formGroup]="shiftForm" class="p-fluid" *ngIf="clientControl.value">
+    <div class="grid">
+      <!-- Fecha Inicio -->
+      <div class="field col-6">
+        <label for="startDate">Fecha Inicio *</label>
+        <p-calendar 
+          id="startDate"
+          formControlName="startDate"
+          dateFormat="dd/mm/yy"
+          [showIcon]="true"
+          placeholder="Seleccione fecha inicio"
+          appendTo="body"
+        ></p-calendar>
+      </div>
+
+      <!-- Fecha Fin -->
+      <div class="field col-6">
+        <label for="endDate">Fecha Fin *</label>
+        <p-calendar 
+          id="endDate"
+          formControlName="endDate"
+          dateFormat="dd/mm/yy"
+          [showIcon]="true"
+          placeholder="Seleccione fecha fin"
+          appendTo="body"
+        ></p-calendar>
+      </div>
+
+      <!-- Hora Inicio -->
+      <div class="field col-6">
+        <label for="startTime">Hora Inicio *</label>
+        <p-calendar 
+          id="startTime"
+          formControlName="startTime"
+          [timeOnly]="true"
+          [showIcon]="true"
+          [icon]="'pi pi-clock'"
+          hourFormat="12"
+          placeholder="HH:MM"
+          appendTo="body"
+        ></p-calendar>
+      </div>
+
+      <!-- Hora Fin -->
+      <div class="field col-6">
+        <label for="endTime">Hora Fin *</label>
+        <p-calendar 
+          id="endTime"
+          formControlName="endTime"
+          [timeOnly]="true"
+          [showIcon]="true"
+          [icon]="'pi pi-clock'"
+          hourFormat="12"
+          placeholder="HH:MM"
+          appendTo="body"
+        ></p-calendar>
+      </div>
+
+      <!-- Empleados -->
+      <div class="field col-12">
+        <label for="dialogEmployees">Empleados *</label>
+        <p-multiSelect 
+          id="dialogEmployees"
+          formControlName="employees"
+          [options]="dialogEmployees"
+          optionLabel="name"
+          optionValue="id"
+          placeholder="Seleccione empleados"
+          [filter]="true"
+          filterBy="name"
+          display="chip"
+          [showClear]="true"
+          appendTo="body"
+          [virtualScroll]="true"
+          [virtualScrollItemSize]="38"
+        ></p-multiSelect>
+      </div>
+
+      <!-- Replicar -->
+      <div class="field col-12">
+        <div class="flex align-items-center">
+          <p-checkbox 
+            formControlName="replicate" 
+            [binary]="true" 
+            inputId="replicate"
+          ></p-checkbox>
+          <label for="replicate" class="ml-2">Replicar</label>
+        </div>
+      </div>
+
+      <!-- Días a replicar (si está activado) -->
+      <div class="field col-12" *ngIf="shiftForm.get('replicate')?.value">
+        <label>Días a replicar</label>
+        <div class="flex gap-2">
+          <p-checkbox name="day" value="0" label="D" [binary]="false" formControlName="replicateDays"></p-checkbox>
+          <p-checkbox name="day" value="1" label="L" [binary]="false" formControlName="replicateDays"></p-checkbox>
+          <p-checkbox name="day" value="2" label="M" [binary]="false" formControlName="replicateDays"></p-checkbox>
+          <p-checkbox name="day" value="3" label="Mi" [binary]="false" formControlName="replicateDays"></p-checkbox>
+          <p-checkbox name="day" value="4" label="J" [binary]="false" formControlName="replicateDays"></p-checkbox>
+          <p-checkbox name="day" value="5" label="V" [binary]="false" formControlName="replicateDays"></p-checkbox>
+          <p-checkbox name="day" value="6" label="S" [binary]="false" formControlName="replicateDays"></p-checkbox>
+        </div>
+      </div>
+
+      <!-- Hasta (si está activado) -->
+      <div class="field col-12" *ngIf="shiftForm.get('replicate')?.value">
+        <label for="replicateUntil">Hasta</label>
+        <p-calendar 
+          id="replicateUntil"
+          formControlName="replicateUntil"
+          dateFormat="dd/mm/yy"
+          [showIcon]="true"
+          placeholder="Seleccione fecha límite"
+          appendTo="body"
+        ></p-calendar>
+      </div>
+    </div>
+  </form>
+
+  <ng-template pTemplate="footer">
+    <button pButton label="Cerrar" icon="pi pi-times" class="p-button-text" (click)="cancelShift()" *ngIf="!clientControl.value"></button>
+    <ng-container *ngIf="clientControl.value">
+      <button pButton label="Cancelar" icon="pi pi-times" class="p-button-text" (click)="cancelShift()"></button>
+      <button pButton label="Guardar" icon="pi pi-check" (click)="saveShift()" [disabled]="shiftForm.invalid"></button>
+    </ng-container>
+  </ng-template>
+</p-dialog>

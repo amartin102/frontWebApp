@@ -350,7 +350,7 @@ export class LayoutComponent {
       items: [
         {
           label: 'Administrar Turnos',
-          routerLink: '/layout/turns/manage'
+          routerLink: '/layout/shifts/manage'
         }
       ]
     },
