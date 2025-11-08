@@ -1,0 +1,265 @@
+<div class="payroll-container">
+  <h2>Gestionar Nómina</h2>
+
+  <p-toast position="top-right"></p-toast>
+  <p-confirmDialog header="Confirmación" icon="pi pi-exclamation-triangle"></p-confirmDialog>
+
+  <!-- Sección 1: Gestionar Novedades -->
+  <p-card header="Gestionar Novedades" styleClass="mb-4">
+    <form [formGroup]="filterForm">
+      <div class="grid">
+        <!-- Filtro Cliente -->
+        <div class="field col-12 md:col-4">
+          <label for="client">Cliente *</label>
+          <p-dropdown 
+            id="client"
+            [options]="clients" 
+            optionLabel="name" 
+            optionValue="id" 
+            placeholder="Seleccione cliente"
+            formControlName="client"
+            [filter]="true"
+            appendTo="body"
+            styleClass="w-full">
+          </p-dropdown>
+        </div>
+
+        <!-- Filtro Empleados (Selección múltiple) -->
+        <div class="field col-12 md:col-4">
+          <label for="employee">Empleados *</label>
+          <p-multiSelect 
+            id="employee"
+            [options]="employees" 
+            optionLabel="name" 
+            optionValue="id" 
+            placeholder="Seleccione empleados"
+            formControlName="employee"
+            [filter]="true"
+            appendTo="body"
+            styleClass="w-full"
+            [disabled]="!clientControl.value"
+            display="chip">
+          </p-multiSelect>
+        </div>
+
+        <!-- Filtro Período -->
+        <div class="field col-12 md:col-4">
+          <label for="period">Período Nómina *</label>
+          <p-dropdown 
+            id="period"
+            [options]="periods" 
+            optionLabel="descripcion" 
+            optionValue="id" 
+            placeholder="Seleccione período"
+            formControlName="period"
+            [filter]="true"
+            appendTo="body"
+            styleClass="w-full"
+            [disabled]="!clientControl.value">
+            <ng-template let-period pTemplate="item">
+              <div>
+                <strong>{{period.identificadorPeriodo}}</strong> - {{period.descripcion}}
+                <br>
+                <small>{{period.fechaInicio | date:'dd/MM/yyyy'}} - {{period.fechaFin | date:'dd/MM/yyyy'}}</small>
+              </div>
+            </ng-template>
+          </p-dropdown>
+        </div>
+      </div>
+
+      <div class="flex justify-content-end mt-3">
+        <button 
+          pButton 
+          label="Novedad" 
+          icon="pi pi-plus" 
+          (click)="openNovedadDialog()"
+          [disabled]="!clientControl.value || !employeeControl.value?.length || !periodControl.value">
+        </button>
+      </div>
+    </form>
+
+    <!-- Grid de Empleados con Novedades -->
+    <div class="mt-4">
+      <p-message 
+        *ngIf="!clientControl.value" 
+        severity="info" 
+        text="Seleccione los filtros para ver novedades de los empleados">
+      </p-message>
+
+      <p-table 
+        *ngIf="clientControl.value"
+        [value]="payrollItems" 
+        [loading]="loading"
+        styleClass="p-datatable-sm"
+        [paginator]="true"
+        [rows]="10"
+        responsiveLayout="scroll">
+        
+        <ng-template pTemplate="header">
+          <tr>
+            <th>Empleado</th>
+            <th>Identificación</th>
+            <th>Concepto</th>
+            <th>Tipo Concepto</th>
+            <th>Período</th>
+            <th class="text-right">Valor Novedad</th>
+            <th>Fecha Novedad</th>
+            <th style="width: 120px">Acciones</th>
+          </tr>
+        </ng-template>
+
+        <ng-template pTemplate="body" let-item>
+          <tr>
+            <td>{{item.empleadoNombre}}</td>
+            <td>{{item.empleadoIdentificacion}}</td>
+            <td>{{item.conceptoNombre || '-'}}</td>
+            <td>
+              <span 
+                class="p-tag" 
+                [ngClass]="item.tipoConceptoNombre?.toLowerCase().includes('deducci') ? 'p-tag-danger' : 'p-tag-success'">
+                {{item.tipoConceptoNombre || '-'}}
+              </span>
+            </td>
+            <td>{{item.periodoIdentificador || item.periodoIdentificacion}}</td>
+            <td class="text-right">{{item.valorNovedad | currency:'COP':'symbol-narrow':'1.0-0'}}</td>
+            <td>{{item.fechaNovedad | date:'dd/MM/yyyy'}}</td>
+            <td>
+              <button 
+                pButton 
+                icon="pi pi-pencil" 
+                class="p-button-rounded p-button-text p-button-warning mr-2"
+                (click)="editPayrollItem(item)"
+                pTooltip="Editar">
+              </button>
+              <button 
+                pButton 
+                icon="pi pi-trash" 
+                class="p-button-rounded p-button-text p-button-danger"
+                (click)="deletePayrollItem(item)"
+                pTooltip="Eliminar">
+              </button>
+            </td>
+          </tr>
+        </ng-template>
+
+        <ng-template pTemplate="emptymessage">
+          <tr>
+            <td colspan="8" class="text-center">
+              <div *ngIf="!periodControl.value" class="p-3">
+                <i class="pi pi-info-circle" style="font-size: 2rem; color: #6c757d;"></i>
+                <p class="mt-2 mb-0" style="color: #6c757d;">
+                  Seleccione un período para ver las novedades registradas
+                </p>
+              </div>
+              <div *ngIf="periodControl.value" class="p-3">
+                <i class="pi pi-inbox" style="font-size: 2rem; color: #6c757d;"></i>
+                <p class="mt-2 mb-0" style="color: #6c757d;">
+                  No hay novedades registradas para este período
+                </p>
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </div>
+  </p-card>
+
+  <!-- Sección 2: Proceso Nómina -->
+  <p-card header="Proceso Nómina">
+    <p-message 
+      severity="info" 
+      text="Aquí se implementará el proceso de nómina. Seleccione un cliente y período arriba para continuar.">
+    </p-message>
+
+    <div class="flex justify-content-center mt-4">
+      <button 
+        pButton 
+        label="Procesar Nómina" 
+        icon="pi pi-check-circle" 
+        class="p-button-success"
+        (click)="procesarNomina()"
+        [disabled]="!clientControl.value || !periodControl.value">
+      </button>
+    </div>
+  </p-card>
+
+  <!-- Modal de Novedades -->
+  <p-dialog 
+    header="Agregar Novedades" 
+    [(visible)]="displayNovedadDialog" 
+    [modal]="true"
+    [style]="{width: '70vw'}"
+    [draggable]="false"
+    [resizable]="false">
+    
+    <div class="novedad-content">
+      <p-message 
+        severity="info" 
+        text="Ingrese las deducciones para los empleados seleccionados">
+      </p-message>
+
+      <!-- Período seleccionado -->
+      <div class="periodo-info text-center mt-3 mb-3">
+        <h4 class="periodo-title">Período: {{getSelectedPeriodName()}}</h4>
+      </div>
+
+      <div class="mt-3">
+        <p-table 
+          [value]="novedadesTemp" 
+          styleClass="p-datatable-sm"
+          responsiveLayout="scroll">
+          
+          <ng-template pTemplate="header">
+            <tr>
+              <th style="width: 40%">Empleado</th>
+              <th style="width: 30%">Deducción</th>
+              <th style="width: 30%">Concepto</th>
+            </tr>
+          </ng-template>
+
+          <ng-template pTemplate="body" let-item>
+            <tr>
+              <td>
+                <strong>{{item.employeeName}}</strong>
+              </td>
+              <td>
+                <p-inputNumber 
+                  [(ngModel)]="item.deduccion" 
+                  mode="currency" 
+                  currency="COP" 
+                  locale="es-CO"
+                  [minFractionDigits]="0"
+                  [maxFractionDigits]="0"
+                  styleClass="w-full">
+                </p-inputNumber>
+              </td>
+              <td>
+                <input 
+                  pInputText 
+                  [(ngModel)]="item.concepto" 
+                  placeholder="Concepto de deducción"
+                  class="w-full" />
+              </td>
+            </tr>
+          </ng-template>
+        </p-table>
+      </div>
+    </div>
+    
+    <ng-template pTemplate="footer">
+      <button 
+        pButton 
+        label="Cancelar" 
+        icon="pi pi-times" 
+        (click)="displayNovedadDialog = false" 
+        class="p-button-secondary">
+      </button>
+      <button 
+        pButton 
+        label="Guardar Novedades" 
+        icon="pi pi-check" 
+        (click)="saveNovedades()">
+      </button>
+    </ng-template>
+  </p-dialog>
+</div>

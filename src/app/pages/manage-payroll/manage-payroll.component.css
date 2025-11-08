@@ -1,0 +1,71 @@
+.payroll-container {
+  padding: 1rem;
+}
+
+.payroll-container h2 {
+  margin-bottom: 1.5rem;
+  color: #333;
+}
+
+:host ::ng-deep .p-card {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+:host ::ng-deep .p-card .p-card-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.mb-4 {
+  margin-bottom: 1.5rem;
+}
+
+.novedad-content {
+  min-height: 300px;
+}
+
+:host ::ng-deep .w-full {
+  width: 100%;
+}
+
+:host ::ng-deep .p-multiselect {
+  width: 100%;
+}
+
+:host ::ng-deep .p-inputnumber {
+  width: 100%;
+}
+
+:host ::ng-deep .p-inputnumber input {
+  width: 100%;
+}
+
+.periodo-info {
+  padding: 1rem;
+  background-color: #f8f9fa;
+  border-radius: 6px;
+  border-left: 4px solid #2196F3;
+}
+
+.periodo-title {
+  margin: 0;
+  color: #495057;
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.mt-3 {
+  margin-top: 1rem;
+}
+
+.mb-3 {
+  margin-bottom: 1rem;
+}

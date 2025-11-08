@@ -1,9 +1,10 @@
 // pages/manage-shifts/manage-shifts.component.ts
-import { Component, OnInit, ViewChild, inject } from '@angular/core';
+import { Component, OnInit, ViewChild, inject, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, FormGroup, FormControl, Validators } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { FullCalendarComponent } from '@fullcalendar/angular';
+import { Calendar } from 'primeng/calendar';
 import { FullCalendarModule } from '@fullcalendar/angular';
 import { CalendarOptions, EventInput } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -86,6 +87,7 @@ export class ManageShiftsComponent implements OnInit {
   private messageService = inject(MessageService);
 
   @ViewChild('calendar') calendarComponent!: FullCalendarComponent;
+  @ViewChild('startDateCalendar') startDateCalendar?: Calendar;
 
   private baseApi = 'https://localhost:7019/api';
   private clientsUrl = `${this.baseApi}/Clients`;
@@ -104,6 +106,7 @@ export class ManageShiftsComponent implements OnInit {
   // Modal
   displayShiftDialog = false;
   dialogEmployees: Employee[] = [];
+  shouldAutoFocus = true; // Controla si se debe hacer autofocus en fecha inicio
 
   // FullCalendar
   calendarOptions: CalendarOptions = {
@@ -312,7 +315,21 @@ export class ManageShiftsComponent implements OnInit {
   }
 
   search() {
-    this.applyFilters();
+    console.log('=== BÚSQUEDA INICIADA ===');
+    console.log('Cliente seleccionado:', this.clientControl.value);
+    console.log('Empleados seleccionados:', this.employeeControl.value);
+    console.log('Empleados cargados en memoria:', this.employees.length);
+    
+    // Si hay un cliente seleccionado pero no hay empleados cargados, cargarlos primero
+    const clientId = this.clientControl.value;
+    if (clientId && this.employees.length === 0) {
+      console.log('Cargando empleados del cliente antes de aplicar filtros...');
+      this.loadEmployeesByClient(clientId);
+      // applyFilters se llamará automáticamente desde loadEmployeesByClient -> updateCalendarData
+    } else {
+      this.applyFilters();
+    }
+    
     this.messageService.add({
       severity: 'info',
       summary: 'Búsqueda',
@@ -341,10 +358,10 @@ export class ManageShiftsComponent implements OnInit {
       console.log('Después de filtrar por fechas:', filtered.length);
     }
 
-    // Filtrar por empleados (selección múltiple) - tiene prioridad sobre cliente
+    // Filtrar por empleados (selección múltiple) - solo si hay empleados seleccionados
     const employeeIds = this.employeeControl.value;
-    if (employeeIds && employeeIds.length > 0) {
-      console.log('Filtrando por empleados:', employeeIds);
+    if (employeeIds && Array.isArray(employeeIds) && employeeIds.length > 0) {
+      console.log('Filtrando por empleados seleccionados:', employeeIds);
       filtered = filtered.filter(shift => {
         const empId = String(shift.employeeId || shift.idEmpleado || '');
         const includes = employeeIds.includes(empId);
@@ -354,17 +371,18 @@ export class ManageShiftsComponent implements OnInit {
         return includes;
       });
       console.log('Después de filtrar por empleados:', filtered.length);
-    } else {
-      // Solo filtrar por cliente si NO hay empleados seleccionados
+    } else if (this.clientControl.value) {
+      // Si no hay empleados seleccionados PERO hay un cliente, filtrar por cliente
       const clientId = this.clientControl.value;
-      if (clientId) {
-        console.log('Filtrando por cliente:', clientId);
-        filtered = filtered.filter(shift => {
-          const shiftClientId = String(shift.clientId || '');
-          return shiftClientId === String(clientId);
-        });
-        console.log('Después de filtrar por cliente:', filtered.length);
-      }
+      console.log('No hay empleados seleccionados. Filtrando por cliente:', clientId);
+      filtered = filtered.filter(shift => {
+        const shiftClientId = String(shift.clientId || '');
+        return shiftClientId === String(clientId);
+      });
+      console.log('Después de filtrar por cliente:', filtered.length);
+    } else {
+      // Si no hay ni empleados ni cliente seleccionado, mostrar todos los turnos
+      console.log('No hay filtros de empleado ni cliente. Mostrando todos los turnos (solo filtrados por fecha si aplica)');
     }
 
     this.filteredShifts = filtered;
@@ -393,6 +411,12 @@ export class ManageShiftsComponent implements OnInit {
 
 
   addShift() {
+    // Habilitar autofocus para modo creación
+    this.shouldAutoFocus = true;
+    
+    // Limpiar el ID de edición
+    delete (this.shiftForm as any).editingShiftId;
+    
     // Siempre abrir el modal
     this.displayShiftDialog = true;
     
@@ -421,6 +445,13 @@ export class ManageShiftsComponent implements OnInit {
     
     // Asegurar que el checkbox de replicar esté habilitado
     this.shiftForm.get('replicate')?.enable();
+    
+    // Hacer focus en el campo de fecha inicio después de que se renderice el modal
+    setTimeout(() => {
+      if (this.startDateCalendar && this.startDateCalendar.inputfieldViewChild) {
+        this.startDateCalendar.inputfieldViewChild.nativeElement.focus();
+      }
+    }, 100);
   }
 
   loadEmployeesForDialog(clientId: string) {
@@ -456,16 +487,90 @@ export class ManageShiftsComponent implements OnInit {
     const formValue = this.shiftForm.value;
     console.log('Guardar turno:', formValue);
     
-    // Aquí iría la lógica para guardar en el backend
+    // Verificar si estamos en modo edición
+    const editingId = (this.shiftForm as any).editingShiftId;
+    
+    if (editingId) {
+      // MODO EDICIÓN: Actualizar turno existente
+      this.updateShift(editingId, formValue);
+    } else {
+      // MODO CREACIÓN: Crear nuevo turno
+      this.createShift(formValue);
+    }
+  }
+
+  updateShift(id: string, formValue: any) {
+    // Formatear las fechas y horas según el formato esperado por el API
+    const startDate = formValue.startDate ? this.formatDate(formValue.startDate) : '';
+    const endDate = formValue.endDate ? this.formatDate(formValue.endDate) : '';
+    const startTime = formValue.startTime ? this.formatTime(formValue.startTime) : '';
+    const endTime = formValue.endTime ? this.formatTime(formValue.endTime) : '';
+    
+    // Construir el payload según la estructura del API
+    const payload = {
+      fechaInicioProgramada: startDate,
+      horaInicioProgramada: startTime,
+      fechaFinProgramada: endDate,
+      horaFinProgramada: endTime,
+      observaciones: formValue.observations || '',
+      modifiedBy: 'string' // Ajustar según el usuario actual
+    };
+    
+    console.log('Actualizando turno:', { id, payload });
+    
+    // Llamar al servicio PUT
+    this.http.put(`${this.shiftsUrl}/${id}`, payload).subscribe({
+      next: (response) => {
+        console.log('Turno actualizado exitosamente:', response);
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Éxito',
+          detail: 'Turno actualizado correctamente',
+          life: 3000
+        });
+        
+        this.displayShiftDialog = false;
+        this.loadShifts(); // Recargar la lista
+      },
+      error: (error) => {
+        console.error('Error al actualizar turno:', error);
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: 'No se pudo actualizar el turno',
+          life: 5000
+        });
+      }
+    });
+  }
+
+  createShift(formValue: any) {
+    // Lógica existente para crear turno nuevo
     this.messageService.add({
       severity: 'success',
       summary: 'Éxito',
-      detail: 'Turno guardado correctamente',
+      detail: 'Turno creado correctamente',
       life: 3000
     });
     
     this.displayShiftDialog = false;
     this.loadShifts(); // Recargar la lista
+  }
+
+  private formatDate(date: Date): string {
+    if (!date) return '';
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  private formatTime(time: Date | string): string {
+    if (!time) return '';
+    if (typeof time === 'string') return time;
+    const hours = String(time.getHours()).padStart(2, '0');
+    const minutes = String(time.getMinutes()).padStart(2, '0');
+    return `${hours}:${minutes}:00`;
   }
 
   cancelShift() {
@@ -484,6 +589,9 @@ export class ManageShiftsComponent implements OnInit {
   editShift(shift: Shift) {
     console.log('=== EDITANDO TURNO ===');
     console.log('Turno completo:', shift);
+    
+    // Deshabilitar autofocus para modo edición
+    this.shouldAutoFocus = false;
     
     // Guardar el ID del turno que se está editando PRIMERO
     (this.shiftForm as any).editingShiftId = shift.id;
@@ -736,10 +844,34 @@ export class ManageShiftsComponent implements OnInit {
 
   updateCalendarData() {
     console.log('=== ACTUALIZANDO DATOS DEL CALENDARIO ===');
+    console.log('Empleados disponibles:', this.employees.length);
+    console.log('Turnos filtrados:', this.filteredShifts.length);
     
-    // Si no hay empleados (no hay cliente seleccionado), mostrar calendario vacío
+    // Si no hay empleados, cargarlos desde los turnos filtrados
+    if (this.employees.length === 0 && this.filteredShifts.length > 0) {
+      console.log('No hay empleados cargados pero hay turnos. Extrayendo empleados de los turnos...');
+      
+      // Extraer empleados únicos de los turnos
+      const uniqueEmployees = new Map<string, Employee>();
+      this.filteredShifts.forEach(shift => {
+        const empId = String(shift.employeeId || shift.idEmpleado || '');
+        const empName = shift.employeeName || shift.employeeName1 || 'Empleado';
+        if (empId && !uniqueEmployees.has(empId)) {
+          uniqueEmployees.set(empId, {
+            id: empId,
+            name: empName,
+            clientId: shift.clientId || ''
+          });
+        }
+      });
+      
+      this.employees = Array.from(uniqueEmployees.values());
+      console.log('Empleados extraídos de los turnos:', this.employees);
+    }
+    
+    // Si aún no hay empleados después de intentar extraerlos, mostrar calendario vacío
     if (this.employees.length === 0) {
-      console.log('No hay empleados cargados. Mostrando calendario vacío.');
+      console.log('No hay empleados disponibles. Mostrando calendario vacío.');
       this.calendarOptions.resources = [];
       this.calendarOptions.events = [];
       this.calendarOptions = { ...this.calendarOptions };
@@ -751,12 +883,14 @@ export class ManageShiftsComponent implements OnInit {
     const employeeIds = this.employeeControl.value;
     let filteredEmployees = this.employees;
     
-    if (employeeIds && employeeIds.length > 0) {
+    if (employeeIds && Array.isArray(employeeIds) && employeeIds.length > 0) {
       console.log('Filtrando recursos por empleados seleccionados:', employeeIds);
       filteredEmployees = this.employees.filter(emp => 
         employeeIds.includes(String(emp.id))
       );
       console.log('Empleados filtrados:', filteredEmployees.map(e => e.name));
+    } else {
+      console.log('No hay empleados específicos seleccionados. Mostrando todos los empleados disponibles:', this.employees.length);
     }
     
     // Convertir empleados a recursos

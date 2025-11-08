@@ -186,7 +186,7 @@ interface MaestroPeriodo {
                          [pTooltip]="'Tipo Dato a Ingresar: ' + row.dataTypeDescription" />
                 </ng-container>
                 <ng-container *ngSwitchCase="'lista'">
-                  <div class="value-container">
+                  <div class="value-container" style="display: flex; align-items: center; gap: 0.5rem;">
                     <p-dropdown [options]="getListOptions(row.id)"
                               [formControl]="getControl(row.id)"
                               optionLabel="label"
@@ -197,7 +197,17 @@ interface MaestroPeriodo {
                               (onChange)="onListChange(row, $event)"
                               pTooltip="Seleccione una opción de la lista"
                               styleClass="lista-dropdown">
-                    </p-dropdown>                   
+                    </p-dropdown>
+                    
+                    <!-- Botón para ver períodos (solo para PeriodicidadEjecucionNomina) -->
+                    <button *ngIf="isPeriodicidadParameter(row)" 
+                            pButton 
+                            type="button"
+                            icon="pi pi-eye" 
+                            class="p-button-rounded p-button-outlined p-button-info p-button-sm"
+                            (click)="openPeriodosModal(row)"
+                            pTooltip="Ver períodos de nómina"
+                            [disabled]="!getControl(row.id).value"></button>
                   </div>
                 </ng-container>
                 <ng-container *ngSwitchCase="'numerico'">
@@ -275,7 +285,14 @@ interface MaestroPeriodo {
         </ng-template>
         <ng-template pTemplate="emptymessage">
           <tr>
-            <td colspan="8" class="text-center">No se encontraron períodos para la periodicidad seleccionada</td>
+            <td colspan="8" class="text-center p-4">
+              <i class="pi pi-info-circle" style="font-size: 2rem; color: #6c757d;"></i>
+              <p class="mt-2 mb-0" style="color: #6c757d;">
+                No se encontraron períodos configurados para la periodicidad seleccionada.
+                <br>
+                <small>Por favor, configure los períodos de nómina en el sistema.</small>
+              </p>
+            </td>
           </tr>
         </ng-template>
       </p-table>
@@ -912,6 +929,47 @@ export class ParameterValuesComponent implements OnInit, OnDestroy {
   // ====== MÉTODOS PARA MANEJO DE PERÍODOS ======
   
   /**
+   * Verifica si el parámetro es de tipo periodicidad
+   */
+  isPeriodicidadParameter(row: ParameterValue): boolean {
+    return row.parameterCode === 'PeriodicidadEjecucionNomina' || 
+           row.parameterCode === 'PeridiocidadEjecucionNomina';
+  }
+
+  /**
+   * Abre el modal de períodos directamente desde el botón de ojo
+   */
+  openPeriodosModal(row: ParameterValue) {
+    const control = this.getControl(row.id);
+    const selectedValue = control.value;
+    
+    if (!selectedValue) {
+      this.messageService.add({
+        severity: 'warn',
+        summary: 'Selección requerida',
+        detail: 'Primero debe seleccionar una periodicidad',
+        life: 3000
+      });
+      return;
+    }
+
+    const listOptions = this.listOptions.get(row.id) || [];
+    const selectedOption = listOptions.find(opt => String(opt.value) === String(selectedValue));
+    const periodicidadLabel = selectedOption?.label || '';
+    
+    if (periodicidadLabel && row.clientId) {
+      this.loadPeriodos(row.clientId, periodicidadLabel);
+    } else {
+      this.messageService.add({
+        severity: 'warn',
+        summary: 'Error',
+        detail: 'No se pudo determinar el cliente o la periodicidad',
+        life: 3000
+      });
+    }
+  }
+
+  /**
    * Detecta cambios en los dropdowns de lista, especialmente para PeriodicidadEjecucionNomina
    */
   onListChange(row: ParameterValue, event: any) {
@@ -976,8 +1034,8 @@ export class ParameterValuesComponent implements OnInit, OnDestroy {
         this.messageService.add({
           severity: 'info',
           summary: 'Periodicidad configurada',
-          detail: `Se ha configurado la periodicidad como "${periodicidadLabel}"`,
-          life: 3000
+          detail: `Periodicidad configurada como "${periodicidadLabel}". Debe configurar los periodos correspondientes.`,
+          life: 4000
         });
       }
     } else {
@@ -1014,15 +1072,16 @@ export class ParameterValuesComponent implements OnInit, OnDestroy {
         console.log(`Períodos filtrados (${periodicidadSeleccionada}):`, this.periodos);
         console.log(`Total encontrados: ${this.periodos.length} de ${todosPeriodos.length}`);
         
+
         this.showPeriodosDialog = true;
         this.loadingPeriodos = false;
         
         if (this.periodos.length === 0) {
           this.messageService.add({
-            severity: 'info',
-            summary: 'Sin períodos',
-            detail: `No se encontraron períodos de tipo "${periodicidadSeleccionada}" para este cliente`,
-            life: 5000
+            severity: 'warn',
+            summary: 'Sin períodos configurados',
+            detail: `No se encontraron períodos configurados de tipo "${periodicidadSeleccionada}" para este cliente. Por favor, configure los períodos en el sistema.`,
+            life: 6000
           });
         } else {
           this.messageService.add({
