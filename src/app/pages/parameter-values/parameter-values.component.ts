@@ -17,6 +17,7 @@ import { TagModule } from 'primeng/tag';
 import { TooltipModule } from 'primeng/tooltip';
 import { ConfirmDialog, ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ToastModule } from 'primeng/toast';
+import { DialogModule } from 'primeng/dialog';
 
 interface ParameterValue {
   id: string;
@@ -45,6 +46,20 @@ interface ParameterValue {
 
 interface SimpleItem { id: string; name: string }
 
+interface MaestroPeriodo {
+  id: string;
+  valorParametroPeriodoCicloIdId: string;
+  identificadorPeriodo: string;
+  descripcion: string;
+  mes: number;
+  fechaInicio: string;
+  fechaFin: string;
+  fechaPago: string;
+  cerrado: boolean;
+  estado: string;
+  periodicidad: string;
+}
+
 @Component({
   selector: 'app-parameter-values',
   standalone: true,
@@ -64,6 +79,7 @@ interface SimpleItem { id: string; name: string }
     TooltipModule,
     ConfirmDialogModule,
     ToastModule,
+    DialogModule,
   ],
   providers: [MessageService, ConfirmationService],
   template: `
@@ -178,6 +194,7 @@ interface SimpleItem { id: string; name: string }
                               [placeholder]="'Seleccione...'"
                               appendTo="body"
                               [style]="{'width': '180px'}"
+                              (onChange)="onListChange(row, $event)"
                               pTooltip="Seleccione una opción de la lista"
                               styleClass="lista-dropdown">
                     </p-dropdown>                   
@@ -212,6 +229,61 @@ interface SimpleItem { id: string; name: string }
         <!--<button pButton label="Limpiar valores" class="p-button-secondary" icon="pi pi-times" (click)="resetValues()"></button>-->
       </div>
     </p-card>
+
+    <!-- Modal de Períodos -->
+    <p-dialog [header]="'Períodos de Nómina - ' + periodicidadActual" 
+              [(visible)]="showPeriodosDialog" 
+              [modal]="true"
+              [style]="{width: '60vw'}"
+              [draggable]="false"
+              [resizable]="false">
+      
+      <p-message *ngIf="periodosErrorMessage" severity="error" [text]="periodosErrorMessage"></p-message>
+      
+      <p-table [value]="periodos" 
+               [loading]="loadingPeriodos"
+               styleClass="p-datatable-sm"
+               [paginator]="true"
+               [rows]="10"
+               responsiveLayout="scroll">
+        <ng-template pTemplate="header">
+          <tr>
+            <th>Periodicidad</th>
+            <th>Identificador</th>
+            <th>Descripción</th>
+            <th>Mes</th>
+            <th>Fecha Inicio</th>
+            <th>Fecha Fin</th>
+            <th>Fecha Pago</th>
+            <th>Estado</th>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="body" let-periodo>
+          <tr>
+            <td><strong>{{periodo.periodicidad}}</strong></td>
+            <td>{{periodo.identificadorPeriodo}}</td>
+            <td>{{periodo.descripcion}}</td>
+            <td>{{periodo.mes}}</td>
+            <td>{{periodo.fechaInicio | date: 'dd/MM/yyyy'}}</td>
+            <td>{{periodo.fechaFin | date: 'dd/MM/yyyy'}}</td>
+            <td>{{periodo.fechaPago | date: 'dd/MM/yyyy'}}</td>
+            <td>
+              <p-tag [value]="periodo.estado" 
+                     [severity]="periodo.cerrado ? 'success' : 'warning'"></p-tag>
+            </td>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="emptymessage">
+          <tr>
+            <td colspan="8" class="text-center">No se encontraron períodos para la periodicidad seleccionada</td>
+          </tr>
+        </ng-template>
+      </p-table>
+      
+      <ng-template pTemplate="footer">
+        <button pButton label="Cerrar" icon="pi pi-times" (click)="showPeriodosDialog = false" class="p-button-secondary"></button>
+      </ng-template>
+    </p-dialog>
   `,
   styles: [`
     .filters { margin-bottom: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 6px; }
@@ -256,6 +328,13 @@ export class ParameterValuesComponent implements OnInit, OnDestroy {
 
   // Map of parameterValue.id -> FormControl for editable value
   valueControls = new Map<string, FormControl>();
+
+  // Propiedades para el modal de períodos
+  showPeriodosDialog = false;
+  periodos: MaestroPeriodo[] = [];
+  loadingPeriodos = false;
+  periodosErrorMessage = '';
+  periodicidadActual = '';
 
   private clientSub?: Subscription;
 
@@ -396,6 +475,23 @@ export class ParameterValuesComponent implements OnInit, OnDestroy {
     this.http.get<ParameterValue[]>(this.valuesUrl, { params }).subscribe({
       next: data => {
         const all = Array.isArray(data) ? data : (data ? [data as any] : []);
+        
+        console.debug('[ParameterValues] Loaded values from API:', all);
+        
+        // Log valores de tipo correo y lista para depuración
+        all.forEach(v => {
+          const typeDesc = (v.dataTypeDescription || '').toLowerCase();
+          if (typeDesc.includes('correo') || typeDesc.includes('email') || 
+              typeDesc.includes('lista') || typeDesc.includes('list')) {
+            console.debug(`[ParameterValues] Value ${v.parameterCode} (${v.dataTypeDescription}):`, {
+              textValue: v.textValue,
+              emailValue: v.emailValue,
+              originValue: v.originValue,
+              dataOrigin: v.dataOrigin
+            });
+          }
+        });
+
 
         // Apply resilient client-side filtering so the UI behaves correctly even if backend
         // doesn't support the query params. None of the filters are mandatory.
@@ -473,8 +569,21 @@ export class ParameterValuesComponent implements OnInit, OnDestroy {
           initial = null;
         }
       } else if (typeKey === 'correo') {
-        // some APIs may use textValue for emails
-        initial = v.emailValue ?? v.textValue ?? '';
+        // El valor puede venir en emailValue o textValue
+        // Priorizar emailValue, pero si está vacío o null, usar textValue
+        const emailVal = v.emailValue && v.emailValue.trim() !== '' ? v.emailValue : null;
+        const textVal = v.textValue && v.textValue.trim() !== '' ? v.textValue : null;
+        initial = emailVal ?? textVal ?? '';
+        
+        console.debug('[ParameterValues] Processing correo type:', {
+          parameterCode: v.parameterCode,
+          emailValue: v.emailValue,
+          textValue: v.textValue,
+          emailValProcessed: emailVal,
+          textValProcessed: textVal,
+          initial: initial,
+          allFields: v
+        });
       } else if (typeKey === 'lista') {
         try {
           // 1. Obtener y parsear las opciones del JSON
@@ -483,37 +592,58 @@ export class ParameterValuesComponent implements OnInit, OnDestroy {
           try {
             raw = originJson ? JSON.parse(originJson) : [];
           } catch (parseError) {
-            console.warn('Error parsing JSON:', originJson);
+            console.warn('[ParameterValues] Error parsing JSON for lista:', originJson, parseError);
             raw = [];
           }
-          console.debug(`[ParameterValues] Parameter ${v.parameterCode}:`, {
+          
+          console.debug(`[ParameterValues] Parameter ${v.parameterCode} (lista):`, {
+            id: v.id,
             textValue: v.textValue,
+            originValue: v.originValue,
+            dataOrigin: v.dataOrigin,
             originJson,
-            parsed: raw
+            parsed: raw,
+            allFields: v
           });
 
           // 2. Convertir a formato dropdown y guardar opciones
           const opts: Array<{ label: string; value: any }> = Array.isArray(raw) 
             ? raw.map(e => ({ 
-                label: String(e.Valor ?? ''), 
-                value: String(e.Id ?? '') 
+                label: String(e.Valor ?? e.valor ?? ''), 
+                value: String(e.Id ?? e.id ?? '') 
               }))
             : [];
           this.listOptions.set(v.id, opts);
 
           // 3. Seleccionar valor inicial - el textValue contiene el Id que queremos seleccionar
-          const targetId = String(v.textValue ?? '');
+          // Limpiar el textValue de espacios y comillas
+          let targetId = v.textValue ? String(v.textValue).trim() : '';
+          
+          // Si el textValue está entre comillas, quitarlas
+          if (targetId.startsWith('"') && targetId.endsWith('"')) {
+            targetId = targetId.substring(1, targetId.length - 1);
+          }
+          
           console.debug(`[ParameterValues] Looking for Id "${targetId}" in options:`, opts);
 
-          // Buscar la opción que tenga ese Id
-          initial = targetId;
+          // Buscar la opción que tenga ese Id (comparación flexible)
+          initial = targetId || null;
 
           // Verificar que el Id existe en las opciones
           const exists = opts.some(opt => String(opt.value) === targetId);
           if (!exists && targetId) {
-            console.warn(`[ParameterValues] Warning: Id "${targetId}" not found in options for parameter ${v.parameterCode}`);
+            console.warn(`[ParameterValues] Warning: Id "${targetId}" not found in options for parameter ${v.parameterCode}. Available options:`, opts.map(o => o.value));
+            // Intentar buscar por label si no encuentra por value
+            const byLabel = opts.find(opt => opt.label.toLowerCase() === targetId.toLowerCase());
+            if (byLabel) {
+              console.debug(`[ParameterValues] Found by label instead, using value:`, byLabel.value);
+              initial = byLabel.value;
+            }
           } else if (exists) {
             console.debug(`[ParameterValues] Found matching Id "${targetId}" in options`);
+          } else if (!targetId) {
+            console.debug(`[ParameterValues] No initial value (textValue is empty)`);
+            initial = null;
           }
         } catch (ex) {
           // invalid JSON -> fallback to plain text
@@ -615,7 +745,8 @@ export class ParameterValuesComponent implements OnInit, OnDestroy {
           dto.hourValue = raw ?? null;
         }
       } else if (typeKey === 'correo') {
-        dto.emailValue = raw ?? null;
+        // Los emails se guardan en textValue (el backend no tiene emailValue)
+        dto.textValue = raw ?? null;
       } else if (typeKey === 'numerico') {
         // ensure number or null
         dto.numericValue = raw != null && raw !== '' ? Number(raw) : null;
@@ -642,17 +773,23 @@ export class ParameterValuesComponent implements OnInit, OnDestroy {
       return dto;
     });
 
-    console.log('[ParameterValues] Original payload:', payload[0]);
+    console.log('[ParameterValues] Original payload:', payload);
 
     // Formatear el payload según la estructura requerida por el servicio
-    const formattedPayload = payload.map(item => ({
-      id: item.id,
-      textValue: item.textValue || "",
-      numericValue: item.numericValue || 0,
-      dateValue: item.dateValue || new Date().toISOString(),
-      hourValue: item.hourValue || "",
-      modifiedBy: "Prueba" // Ajustar según el usuario actual
-    }));
+    // IMPORTANTE: El backend NO tiene emailValue, los emails se guardan en textValue
+    const formattedPayload = payload.map(item => {
+      // Si hay emailValue, moverlo a textValue porque el backend no acepta emailValue
+      const textVal = item.emailValue || item.textValue || "";
+      
+      return {
+        id: item.id,
+        textValue: textVal,
+        numericValue: item.numericValue || 0,
+        dateValue: item.dateValue || new Date().toISOString(),
+        hourValue: item.hourValue || "",
+        modifiedBy: "Prueba" // Ajustar según el usuario actual
+      };
+    });
 
     console.log('[ParameterValues] Formatted payload:', formattedPayload);
     
@@ -684,6 +821,7 @@ export class ParameterValuesComponent implements OnInit, OnDestroy {
     }
 
     // Crear el payload con la estructura completa y valores por defecto
+    // IMPORTANTE: El backend NO tiene emailValue, los emails se guardan en textValue
     const payload = [{
       id: row.id,
       textValue: "",
@@ -707,6 +845,9 @@ export class ParameterValuesComponent implements OnInit, OnDestroy {
       payload[0].hourValue = value instanceof Date ? 
         `${value.getHours().toString().padStart(2, '0')}:${value.getMinutes().toString().padStart(2, '0')}` : 
         value;
+    } else if (tipo.includes('correo') || tipo.includes('email')) {
+      // Los emails se guardan en textValue (el backend no tiene emailValue)
+      payload[0].textValue = value?.toString() || "";
     } else {
       // Por defecto, guardar como texto (incluye listas)
       payload[0].textValue = value?.toString() || "";
@@ -766,6 +907,144 @@ export class ParameterValuesComponent implements OnInit, OnDestroy {
     this.loadClients();
     // after clearing filters, fetch all values from the backend so the table is populated
     this.loadValues();
+  }
+
+  // ====== MÉTODOS PARA MANEJO DE PERÍODOS ======
+  
+  /**
+   * Detecta cambios en los dropdowns de lista, especialmente para PeriodicidadEjecucionNomina
+   */
+  onListChange(row: ParameterValue, event: any) {
+    console.log('=== onListChange ejecutado ===');
+    console.log('Row:', row);
+    console.log('ParameterCode:', row.parameterCode);
+    console.log('Event:', event);
+    console.log('Event.value:', event.value);
+    
+    // Soportar ambas variantes: con y sin 'o' (PeriodicidadEjecucionNomina y PeridiocidadEjecucionNomina)
+    const isPeriodicidad = row.parameterCode === 'PeriodicidadEjecucionNomina' || 
+                          row.parameterCode === 'PeridiocidadEjecucionNomina';
+    
+    if (isPeriodicidad) {
+      console.log('✅ Es periodicidad de ejecución de nómina - Ejecutando handlePeriodicidadChange');
+      this.handlePeriodicidadChange(row, event.value);
+    } else {
+      console.log('❌ NO es periodicidad, es:', row.parameterCode);
+    }
+  }
+
+  /**
+   * Maneja el cambio de periodicidad y abre el modal solo si es Quincenal
+   */
+  handlePeriodicidadChange(row: ParameterValue, newValue: any) {
+    console.log('=== handlePeriodicidadChange ejecutado ===');
+    console.log('Row completo:', row);
+    console.log('NewValue:', newValue);
+    
+    // Obtener el label de la opción seleccionada
+    const listOptions = this.listOptions.get(row.id) || [];
+    console.log('List options para este parámetro:', listOptions);
+    
+    const selectedOption = listOptions.find(opt => String(opt.value) === String(newValue));
+    console.log('Selected option:', selectedOption);
+    
+    const periodicidadLabel = (selectedOption?.label || '');
+    console.log('Periodicidad label:', periodicidadLabel);
+    
+    if (periodicidadLabel && periodicidadLabel.trim() !== '') {
+      const periodicidadLower = periodicidadLabel.toLowerCase().trim();
+      const clientId = row.clientId;
+      console.log('ClientId extraído:', clientId);
+      
+      // Solo abrir modal si es Quincenal
+      if (periodicidadLower === 'quincenal') {
+        if (clientId) {
+          console.log('✅ Es Quincenal - Llamando a loadPeriodos con:', clientId, periodicidadLabel);
+          this.loadPeriodos(clientId, periodicidadLabel);
+        } else {
+          console.log('❌ No hay clientId');
+          this.messageService.add({
+            severity: 'warn',
+            summary: 'Cliente no encontrado',
+            detail: 'No se pudo determinar el cliente para cargar los períodos',
+            life: 5000
+          });
+        }
+      } else {
+        // Para otras periodicidades (Semanal, Mensual), solo mostrar toast informativo
+        console.log('ℹ️ Periodicidad diferente a Quincenal:', periodicidadLabel);
+        this.messageService.add({
+          severity: 'info',
+          summary: 'Periodicidad configurada',
+          detail: `Se ha configurado la periodicidad como "${periodicidadLabel}"`,
+          life: 3000
+        });
+      }
+    } else {
+      console.log('❌ Periodicidad label está vacío');
+    }
+  }
+
+  /**
+   * Carga los períodos desde el API y los filtra por periodicidad
+   */
+  loadPeriodos(clientId: string, periodicidadSeleccionada: string) {
+    this.loadingPeriodos = true;
+    this.periodosErrorMessage = '';
+    this.periodos = [];
+    this.periodicidadActual = periodicidadSeleccionada;
+    
+    const url = `${this.baseApi}/MaestroPeriodo/byClient/${clientId}`;
+    console.log('Cargando períodos desde:', url);
+    console.log('Filtrando por periodicidad:', periodicidadSeleccionada);
+    
+    this.http.get<MaestroPeriodo[]>(url).subscribe({
+      next: (data) => {
+        console.log('Períodos cargados del API:', data);
+        
+        // Filtrar por periodicidad (comparación case-insensitive)
+        const todosPeriodos = data || [];
+        const periodicidadLower = periodicidadSeleccionada.toLowerCase().trim();
+        
+        this.periodos = todosPeriodos.filter(periodo => 
+          periodo.periodicidad && 
+          periodo.periodicidad.toLowerCase().trim() === periodicidadLower
+        );
+        
+        console.log(`Períodos filtrados (${periodicidadSeleccionada}):`, this.periodos);
+        console.log(`Total encontrados: ${this.periodos.length} de ${todosPeriodos.length}`);
+        
+        this.showPeriodosDialog = true;
+        this.loadingPeriodos = false;
+        
+        if (this.periodos.length === 0) {
+          this.messageService.add({
+            severity: 'info',
+            summary: 'Sin períodos',
+            detail: `No se encontraron períodos de tipo "${periodicidadSeleccionada}" para este cliente`,
+            life: 5000
+          });
+        } else {
+          this.messageService.add({
+            severity: 'success',
+            summary: 'Períodos cargados',
+            detail: `Se encontraron ${this.periodos.length} período(s) de tipo "${periodicidadSeleccionada}"`,
+            life: 3000
+          });
+        }
+      },
+      error: (error) => {
+        console.error('Error al cargar períodos:', error);
+        this.loadingPeriodos = false;
+        this.periodosErrorMessage = 'Error al cargar los períodos. Verifique la conexión con el servidor.';
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: 'No se pudieron cargar los períodos de nómina',
+          life: 5000
+        });
+      }
+    });
   }
 }
   
