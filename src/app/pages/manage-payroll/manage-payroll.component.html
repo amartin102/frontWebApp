@@ -102,8 +102,8 @@
             <th>Concepto</th>
             <th>Tipo Concepto</th>
             <th>Período</th>
-            <th class="text-right">Valor Novedad</th>
-            <th>Fecha Novedad</th>
+            <th class="text-center">Valor Novedad</th>
+            <th class="text-center">Fecha Novedad</th>
             <th style="width: 120px">Acciones</th>
           </tr>
         </ng-template>
@@ -121,8 +121,8 @@
               </span>
             </td>
             <td>{{item.periodoIdentificador || item.periodoIdentificacion}}</td>
-            <td class="text-right">{{item.valorNovedad | currency:'COP':'symbol-narrow':'1.0-0'}}</td>
-            <td>{{item.fechaNovedad | date:'dd/MM/yyyy'}}</td>
+            <td class="text-center">{{item.valorNovedad | currency:'COP':'symbol-narrow':'1.0-0'}}</td>
+            <td class="text-center">{{item.fechaNovedad | date:'dd/MM/yyyy'}}</td>
             <td>
               <button 
                 pButton 
@@ -166,20 +166,166 @@
 
   <!-- Sección 2: Proceso Nómina -->
   <p-card header="Proceso Nómina">
-    <p-message 
-      severity="info" 
-      text="Aquí se implementará el proceso de nómina. Seleccione un cliente y período arriba para continuar.">
-    </p-message>
+    <!-- Panel de Control -->
+    <div class="grid">
+      <div class="col-12 md:col-4">
+        <label for="tipoProceso">Tipo de Proceso</label>
+        <p-dropdown 
+          id="tipoProceso"
+          [(ngModel)]="selectedProceso"
+          [options]="tiposProceso"
+          placeholder="Seleccione tipo de proceso"
+          styleClass="w-full"
+          [disabled]="procesoEnEjecucion">
+        </p-dropdown>
+      </div>
 
-    <div class="flex justify-content-center mt-4">
-      <button 
-        pButton 
-        label="Procesar Nómina" 
-        icon="pi pi-check-circle" 
-        class="p-button-success"
-        (click)="procesarNomina()"
-        [disabled]="!clientControl.value || !periodControl.value">
-      </button>
+      <div class="col-12 md:col-8 flex align-items-end gap-2">
+        <button 
+          pButton 
+          label="Ejecutar Proceso" 
+          icon="pi pi-play" 
+          class="p-button-success"
+          (click)="ejecutarProceso()"
+          [disabled]="!clientControl.value || !periodControl.value || procesoEnEjecucion">
+        </button>
+        <button 
+          pButton 
+          label="Detener" 
+          icon="pi pi-stop" 
+          class="p-button-danger"
+          (click)="detenerProceso()"
+          [disabled]="!procesoEnEjecucion">
+        </button>
+      </div>
+    </div>
+
+    <!-- Progress Bar -->
+    <div class="mt-4" *ngIf="procesoEnEjecucion || procesoProgress > 0">
+      <label>Estado del Proceso</label>
+      <p-progressBar 
+        [value]="procesoProgress" 
+        [showValue]="true">
+      </p-progressBar>
+    </div>
+
+    <!-- Resumen y Resultados -->
+    <div class="mt-4" *ngIf="procesoResultados.length > 0">
+      <!-- Panel de Resumen -->
+      <div class="grid mb-3">
+        <div class="col-12 md:col-3">
+          <div class="summary-card">
+            <i class="pi pi-users summary-icon"></i>
+            <div>
+              <div class="summary-label">Empleados a Liquidar</div>
+              <div class="summary-value">{{totalEmpleados}}</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-12 md:col-3">
+          <div class="summary-card">
+            <i class="pi pi-dollar summary-icon"></i>
+            <div>
+              <div class="summary-label">Total a Pagar</div>
+              <div class="summary-value">{{totalAPagar | currency:'COP':'symbol-narrow':'1.0-0'}}</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-12 md:col-3">
+          <div class="summary-card warning">
+            <i class="pi pi-exclamation-triangle summary-icon"></i>
+            <div>
+              <div class="summary-label">Advertencias</div>
+              <div class="summary-value">{{empleadosConAdvertencias}}</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-12 md:col-3">
+          <div class="summary-card error">
+            <i class="pi pi-times-circle summary-icon"></i>
+            <div>
+              <div class="summary-label">Errores</div>
+              <div class="summary-value">{{empleadosConErrores}}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Botones de Descarga -->
+      <div class="flex gap-2 mb-3">
+        <button 
+          pButton 
+          label="Descargar PDF" 
+          icon="pi pi-file-pdf" 
+          class="p-button-danger p-button-outlined"
+          (click)="descargarReporte('pdf')">
+        </button>
+        <button 
+          pButton 
+          label="Descargar Excel" 
+          icon="pi pi-file-excel" 
+          class="p-button-success p-button-outlined"
+          (click)="descargarReporte('excel')">
+        </button>
+      </div>
+
+      <!-- Tabla de Resultados -->
+      <p-table 
+        [value]="procesoResultados" 
+        styleClass="p-datatable-sm"
+        [paginator]="true"
+        [rows]="10"
+        responsiveLayout="scroll">
+        
+        <ng-template pTemplate="header">
+          <tr>
+            <th>Empleado</th>
+            <th>Identificación</th>
+            <th class="text-right">Salario Base</th>
+            <th class="text-right">Devengos</th>
+            <th class="text-right">Deducciones</th>
+            <th class="text-right">Total a Pagar</th>
+            <th>Novedades</th>
+            <th class="text-center">Estado</th>
+          </tr>
+        </ng-template>
+
+        <ng-template pTemplate="body" let-item>
+          <tr>
+            <td>{{item.empleadoNombre}}</td>
+            <td>{{item.identificacion}}</td>
+            <td class="text-right">{{item.salarioBase | currency:'COP':'symbol-narrow':'1.0-0'}}</td>
+            <td class="text-right">{{item.devengos | currency:'COP':'symbol-narrow':'1.0-0'}}</td>
+            <td class="text-right">{{item.deducciones | currency:'COP':'symbol-narrow':'1.0-0'}}</td>
+            <td class="text-right">
+              <strong>{{item.totalPagar | currency:'COP':'symbol-narrow':'1.0-0'}}</strong>
+            </td>
+            <td>{{item.novedades}}</td>
+            <td class="text-center">
+              <p-tag 
+                [severity]="getEstadoSeverity(item.estado)" 
+                [value]="item.estado === 'success' ? 'OK' : item.estado === 'warning' ? 'Advertencia' : 'Error'">
+              </p-tag>
+            </td>
+          </tr>
+        </ng-template>
+
+        <ng-template pTemplate="emptymessage">
+          <tr>
+            <td colspan="8" class="text-center">
+              No hay resultados del proceso
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </div>
+
+    <!-- Mensaje inicial cuando no hay resultados -->
+    <div *ngIf="procesoResultados.length === 0 && !procesoEnEjecucion">
+      <p-message 
+        severity="info" 
+        text="Seleccione un tipo de proceso y haga clic en 'Ejecutar Proceso' para comenzar.">
+      </p-message>
     </div>
   </p-card>
 
@@ -211,9 +357,10 @@
           
           <ng-template pTemplate="header">
             <tr>
-              <th style="width: 40%">Empleado</th>
-              <th style="width: 30%">Deducción</th>
+              <th style="width: 25%">Empleado</th>
               <th style="width: 30%">Concepto</th>
+              <th style="width: 25%">Valor</th>
+              <th style="width: 20%">Fecha Novedad</th>
             </tr>
           </ng-template>
 
@@ -223,8 +370,25 @@
                 <strong>{{item.employeeName}}</strong>
               </td>
               <td>
+                <p-dropdown 
+                  [(ngModel)]="item.conceptoId" 
+                  [options]="conceptosAgrupados"
+                  [group]="true"
+                  placeholder="Seleccione concepto"
+                  [filter]="true"
+                  filterBy="label"
+                  appendTo="body"
+                  styleClass="w-full">
+                  <ng-template let-group pTemplate="group">
+                    <div class="flex align-items-center">
+                      <strong>{{group.label}}</strong>
+                    </div>
+                  </ng-template>
+                </p-dropdown>
+              </td>
+              <td>
                 <p-inputNumber 
-                  [(ngModel)]="item.deduccion" 
+                  [(ngModel)]="item.valor" 
                   mode="currency" 
                   currency="COP" 
                   locale="es-CO"
@@ -234,11 +398,13 @@
                 </p-inputNumber>
               </td>
               <td>
-                <input 
-                  pInputText 
-                  [(ngModel)]="item.concepto" 
-                  placeholder="Concepto de deducción"
-                  class="w-full" />
+                <p-calendar 
+                  [(ngModel)]="item.fechaNovedad"
+                  dateFormat="yy-mm-dd"
+                  showIcon="true"
+                  appendTo="body"
+                  styleClass="w-full">
+                </p-calendar>
               </td>
             </tr>
           </ng-template>
