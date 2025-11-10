@@ -39,6 +39,9 @@ interface ParameterValue {
   dateValue?: string | null; // ISO
   emailValue?: string | null;
   hourValue?: string | null; // Campo específico para horas
+  // nivel inconsistencia
+  intIdNivelInconsistencia?: number | null;
+  strNivelInconsistencia?: string | null;
   // audit
   createdBy?: string | null;
   creationDate?: string | null;
@@ -143,17 +146,19 @@ interface MaestroPeriodo {
       <p-table [value]="values" [paginator]="true" [rows]="pageSize" [first]="first" (onPage)="onPage($event)" [loading]="loading" styleClass="p-datatable-sm">
         <ng-template pTemplate="header">
           <tr>
-            <th style="width:20%">Código</th>
-            <th style="width:15%">Empleado</th>
-            <th style="width:15%">Cliente</th>
-            <th style="width:30%">Valor</th>
-            <th style="width:10%">Creado Por</th>
-            <th style="width:10%">Fecha Creación</th>
+            <th style="width:18%">Código</th>
+            <th style="width:10%">Nivel</th>
+            <th style="width:13%">Empleado</th>
+            <th style="width:13%">Cliente</th>
+            <th style="width:28%">Valor</th>
+            <th style="width:9%">Creado Por</th>
+            <th style="width:9%">Fecha Creación</th>
           </tr>
         </ng-template>
         <ng-template pTemplate="body" let-row>
           <tr>
             <td><strong>{{row.parameterCode}}</strong></td>
+            <td>{{row.strNivelInconsistencia}}</td>
             <td>{{row.employeeName}}</td>
             <td>{{row.clientName}}</td>
             <td>
@@ -164,10 +169,15 @@ interface MaestroPeriodo {
                 <ng-container [ngSwitch]="getTypeKey(row)">
                 <ng-container *ngSwitchCase="'texto'">
                   <input pInputText [formControl]="getControl(row.id)" 
+                         [disabled]="isParameterDisabled(row)"
+                         [readonly]="isParameterDisabled(row)"
+                         [class.readonly-field]="isParameterDisabled(row)"
                          [pTooltip]="'Tipo Dato a Ingresar: ' + row.dataTypeDescription" />
                 </ng-container>
                 <ng-container *ngSwitchCase="'fecha'">
                   <p-calendar [formControl]="getControl(row.id)" dateFormat="yy-mm-dd" [showIcon]="true"
+                            [disabled]="isParameterDisabled(row)"
+                            [class.readonly-field]="isParameterDisabled(row)"
                             [pTooltip]="'Tipo Dato a Ingresar: ' + row.dataTypeDescription"></p-calendar>
                 </ng-container>
                 <ng-container *ngSwitchCase="'hora'">
@@ -177,12 +187,17 @@ interface MaestroPeriodo {
                             [showTime]="true"
                             [showSeconds]="false"
                             icon="pi pi-clock"
+                            [disabled]="isParameterDisabled(row)"
+                            [class.readonly-field]="isParameterDisabled(row)"
                             [pTooltip]="'Seleccione hora y minutos'"
                             [style]="{'width': '130px'}"
                             hourFormat="24"></p-calendar>
                 </ng-container>
                 <ng-container *ngSwitchCase="'correo'">
                   <input pInputText type="email" [formControl]="getControl(row.id)"
+                         [disabled]="isParameterDisabled(row)"
+                         [readonly]="isParameterDisabled(row)"
+                         [class.readonly-field]="isParameterDisabled(row)"
                          [pTooltip]="'Tipo Dato a Ingresar: ' + row.dataTypeDescription" />
                 </ng-container>
                 <ng-container *ngSwitchCase="'lista'">
@@ -192,6 +207,8 @@ interface MaestroPeriodo {
                               optionLabel="label"
                               [optionValue]="'value'"
                               [placeholder]="'Seleccione...'"
+                              [disabled]="isParameterDisabled(row)"
+                              [class.readonly-field]="isParameterDisabled(row)"
                               appendTo="body"
                               [style]="{'width': '180px'}"
                               (onChange)="onListChange(row, $event)"
@@ -211,12 +228,37 @@ interface MaestroPeriodo {
                   </div>
                 </ng-container>
                 <ng-container *ngSwitchCase="'numerico'">
-                  <p-inputNumber [formControl]="getControl(row.id)" [useGrouping]="false"
+                  <!-- Porcentaje -->
+                  <p-inputNumber *ngIf="row.parameterCode.toLowerCase().includes('porcentaje')"
+                               [formControl]="getControl(row.id)" 
+                               [useGrouping]="false"
+                               [minFractionDigits]="0"
+                               [maxFractionDigits]="4"
+                               suffix="%"
+                               [min]="0"
+                               [max]="100"
+                               [disabled]="isParameterDisabled(row)"
+                               [class.readonly-field]="isParameterDisabled(row)"
+                               [pTooltip]="'Tipo Dato a Ingresar: ' + row.dataTypeDescription"></p-inputNumber>
+                  <!-- Moneda (valores) -->
+                  <p-inputNumber *ngIf="!row.parameterCode.toLowerCase().includes('porcentaje')"
+                               [formControl]="getControl(row.id)" 
+                               [useGrouping]="true"
+                               [minFractionDigits]="0"
+                               [maxFractionDigits]="2"
+                               mode="currency"
+                               currency="COP"
+                               locale="es-CO"
+                               [disabled]="isParameterDisabled(row)"
+                               [class.readonly-field]="isParameterDisabled(row)"
                                [pTooltip]="'Tipo Dato a Ingresar: ' + row.dataTypeDescription"></p-inputNumber>
                 </ng-container>
                 <ng-container *ngSwitchDefault>
                   <!-- fallback to text -->
                   <input pInputText [formControl]="getControl(row.id)"
+                         [disabled]="isParameterDisabled(row)"
+                         [readonly]="isParameterDisabled(row)"
+                         [class.readonly-field]="isParameterDisabled(row)"
                          [pTooltip]="'Tipo Dato a Ingresar: ' + row.dataTypeDescription" />
                 </ng-container>
               </ng-container>
@@ -323,6 +365,33 @@ interface MaestroPeriodo {
     }
     :host ::ng-deep .p-button.p-button-sm {
       font-size: 0.875rem;
+    }
+    
+    /* Estilos para campos readonly/deshabilitados */
+    :host ::ng-deep .readonly-field input,
+    :host ::ng-deep .readonly-field .p-inputnumber input,
+    :host ::ng-deep .readonly-field .p-calendar input,
+    :host ::ng-deep .readonly-field .p-dropdown {
+      background-color: #e9ecef !important;
+      color: #6c757d !important;
+      cursor: not-allowed !important;
+      opacity: 0.7 !important;
+      pointer-events: none !important;
+    }
+    
+    :host ::ng-deep .readonly-field .p-inputnumber-button,
+    :host ::ng-deep .readonly-field .p-calendar-trigger,
+    :host ::ng-deep .readonly-field .p-dropdown-trigger {
+      display: none !important;
+      pointer-events: none !important;
+    }
+    
+    :host ::ng-deep .readonly-field.p-inputnumber,
+    :host ::ng-deep .readonly-field.p-calendar,
+    :host ::ng-deep .readonly-field.p-dropdown {
+      pointer-events: none !important;
+      user-select: none !important;
+    }
       padding: 0.4rem 0.8rem;
     }
     .actions-container .p-button {
@@ -533,7 +602,14 @@ export class ParameterValuesComponent implements OnInit, OnDestroy {
           return true;
         });
 
-        this.values = filtered;
+        // Ordenar por intIdNivelInconsistencia de menor a mayor
+        const sorted = filtered.sort((a, b) => {
+          const nivelA = a.intIdNivelInconsistencia ?? 999;
+          const nivelB = b.intIdNivelInconsistencia ?? 999;
+          return nivelA - nivelB;
+        });
+
+        this.values = sorted;
         this.initControls();
         this.loading = false;
       },
@@ -681,7 +757,157 @@ export class ParameterValuesComponent implements OnInit, OnDestroy {
       }
       // no special validators for 'lista' beyond required if desired in future
 
-      this.valueControls.set(v.id, new FormControl(initial, validators));
+      const control = new FormControl(initial, validators);
+      this.valueControls.set(v.id, control);
+      
+      // Si es ValorSalarioBase, agregar listener para calcular automáticamente otros valores
+      if (v.parameterCode === 'ValorSalarioBase') {
+        control.valueChanges.subscribe(salarioBase => {
+          this.calcularValoresLaborales(salarioBase);
+        });
+      }
+      
+      // Si es NivelRiesgoARL, agregar listener para calcular el PorcentajeARL
+      if (v.parameterCode === 'NivelRiesgoARL') {
+        control.valueChanges.subscribe(nivelRiesgo => {
+          this.calcularPorcentajeARL(nivelRiesgo);
+        });
+      }
+    }
+  }
+
+  /**
+   * Calcula automáticamente los valores laborales basándose en el salario base
+   * Normativa laboral colombiana 2025
+   */
+  calcularValoresLaborales(salarioBase: number) {
+    if (!salarioBase || salarioBase <= 0) {
+      return;
+    }
+
+    const SALARIO_MINIMO_2025 = 1423500;
+    const AUXILIO_TRANSPORTE_2025 = 200000;
+    
+    // Determinar si aplica auxilio de transporte (si gana hasta 2 salarios mínimos)
+    const aplicaAuxTransporte = salarioBase <= (SALARIO_MINIMO_2025 * 2);
+    
+    // Calcular auxilio de transporte proporcional al salario
+    let auxTransporte = 0;
+    if (aplicaAuxTransporte) {
+      // Proporcional: (Salario Base / Salario Mínimo) * Auxilio Transporte Base
+      const proporcion = salarioBase / SALARIO_MINIMO_2025;
+      auxTransporte = Math.round(AUXILIO_TRANSPORTE_2025 * proporcion);
+    }
+
+    // Cálculo de horas según normativa colombiana
+    // 1. Hora ordinaria diurna = Salario / 230 (horas mensuales para liquidación de extras)
+    // Nota: Se usa 230 como base para cálculo de hora ordinaria según jurisprudencia colombiana
+    const horaOrdinariaDiurna = Math.round(salarioBase / 230);
+
+    // 2. Hora ordinaria nocturna = Hora ordinaria diurna * 1.35 (recargo nocturno 35%)
+    const horaOrdinariaNocturna = Math.round(horaOrdinariaDiurna * 1.35);
+
+    // 3. Hora extra diurna = Hora ordinaria diurna * 1.25 (recargo 25%)
+    const horaExtraDiurna = Math.round(horaOrdinariaDiurna * 1.25);
+
+    // 4. Hora extra nocturna = Hora ordinaria diurna * 1.75 (recargo 75%)
+    const horaExtraNocturna = Math.round(horaOrdinariaDiurna * 1.75);
+
+    // 5. Hora ordinaria dominical/festiva diurna = Hora ordinaria diurna * 1.75 (recargo 75%)
+    const horaOrdinariaDiurnaDomFestivo = Math.round(horaOrdinariaDiurna * 1.75);
+
+    // 6. Hora ordinaria dominical/festiva nocturna = Hora ordinaria diurna * 2.10 (recargo 110%)
+    const horaOrdinariaNocturnaDomFestivo = Math.round(horaOrdinariaDiurna * 2.10);
+
+    // 7. Hora extra ordinaria dominical/festiva diurna = Hora ordinaria diurna * 2.0 (recargo 100%)
+    const horaExtraOrdinariaDiurnaDomFestivo = Math.round(horaOrdinariaDiurna * 2.0);
+
+    // 8. Hora extra ordinaria dominical/festiva nocturna = Hora ordinaria diurna * 2.50 (recargo 150%)
+    const horaExtraOrdinariaNocturnaDomFestivo = Math.round(horaOrdinariaDiurna * 2.50);
+
+    // Buscar los parámetros y actualizar sus valores
+    const parametrosACalcular = {
+      'ValorHoraOrdinariaDiurna': horaOrdinariaDiurna,
+      'ValorHoraOrdinariaNocturna': horaOrdinariaNocturna,
+      'ValorHoraExtraDiurna': horaExtraDiurna,
+      'ValorHoraExtraNocturna': horaExtraNocturna,
+      'ValorHoraOrdinariaDiurnaDomFestivo': horaOrdinariaDiurnaDomFestivo,
+      'ValorHoraOrdinariaNocturnaDomFestivo': horaOrdinariaNocturnaDomFestivo,
+      'ValorHoraExtraOrdinariaDiurnaDomFestivo': horaExtraOrdinariaDiurnaDomFestivo,
+      'ValorHoraExtraOrdinariaNocturnaDomFestivo': horaExtraOrdinariaNocturnaDomFestivo,
+      'ValorAuxTransporte': auxTransporte
+    };
+
+    console.log('🧮 Calculando valores laborales basados en salario:', salarioBase);
+    console.log('📊 Valores calculados:', parametrosACalcular);
+
+    // Actualizar los controles con los valores calculados
+    this.values.forEach(param => {
+      if (parametrosACalcular.hasOwnProperty(param.parameterCode)) {
+        const control = this.valueControls.get(param.id);
+        if (control) {
+          const valorCalculado = parametrosACalcular[param.parameterCode as keyof typeof parametrosACalcular];
+          control.setValue(valorCalculado, { emitEvent: false });
+          console.log(`✅ ${param.parameterCode} = ${valorCalculado}`);
+        }
+      }
+    });
+  }
+
+  /**
+   * Calcula el porcentaje de ARL según el nivel de riesgo
+   * Decreto 1772 de 1994 y actualizaciones - Colombia 2025
+   */
+  calcularPorcentajeARL(nivelRiesgo: string | number) {
+    if (!nivelRiesgo) {
+      return;
+    }
+
+    // Convertir a string y limpiar
+    const nivel = String(nivelRiesgo).trim().toLowerCase();
+    
+    // Porcentajes según la clasificación de riesgo laboral en Colombia
+    // Basado en el Decreto 1772 de 1994 y actualizaciones vigentes
+    let porcentajeARL = 0;
+    
+    // Detectar el nivel (puede venir como "I", "1", "Nivel I", etc.)
+    if (nivel.includes('i') && !nivel.includes('ii') && !nivel.includes('iii') && !nivel.includes('iv') && !nivel.includes('v')) {
+      // Clase I - Riesgo Mínimo: 0.522%
+      porcentajeARL = 0.522;
+    } else if (nivel.includes('ii') && !nivel.includes('iii') && !nivel.includes('iv') && !nivel.includes('v')) {
+      // Clase II - Riesgo Bajo: 1.044%
+      porcentajeARL = 1.044;
+    } else if (nivel.includes('iii') && !nivel.includes('iv') && !nivel.includes('v')) {
+      // Clase III - Riesgo Medio: 2.436%
+      porcentajeARL = 2.436;
+    } else if (nivel.includes('iv') && !nivel.includes('v')) {
+      // Clase IV - Riesgo Alto: 4.350%
+      porcentajeARL = 4.350;
+    } else if (nivel.includes('v')) {
+      // Clase V - Riesgo Máximo: 6.960%
+      porcentajeARL = 6.960;
+    } else if (nivel === '1') {
+      porcentajeARL = 0.522;
+    } else if (nivel === '2') {
+      porcentajeARL = 1.044;
+    } else if (nivel === '3') {
+      porcentajeARL = 2.436;
+    } else if (nivel === '4') {
+      porcentajeARL = 4.350;
+    } else if (nivel === '5') {
+      porcentajeARL = 6.960;
+    }
+
+    if (porcentajeARL > 0) {
+      // Buscar el parámetro PorcentajeARL y actualizar su valor
+      const porcentajeARLParam = this.values.find(p => p.parameterCode === 'PorcentajeARL');
+      if (porcentajeARLParam) {
+        const control = this.valueControls.get(porcentajeARLParam.id);
+        if (control) {
+          control.setValue(porcentajeARL, { emitEvent: false });
+          console.log(`✅ PorcentajeARL actualizado a ${porcentajeARL}% para nivel de riesgo ${nivelRiesgo}`);
+        }
+      }
     }
   }
 
@@ -717,6 +943,24 @@ export class ParameterValuesComponent implements OnInit, OnDestroy {
       this.valueControls.set(id, c);
     }
     return c;
+  }
+
+  // Verificar si el parámetro debe estar deshabilitado
+  isParameterDisabled(row: ParameterValue): boolean {
+    const disabledCodes = [
+      'ValorHoraExtraOrdinariaDiurnaDomFestivo',
+      'ValorHoraExtraOrdinariaNocturnaDomFestivo',
+      'ValorHoraOrdinariaNocturna',
+      'ValorHoraExtraNocturna',
+      'ValorHoraExtraDiurna',
+      'ValorHoraOrdinariaDiurna',
+      'ValorHoraOrdinariaNocturnaDomFestivo',
+      'ValorHoraOrdinariaDiurnaDomFestivo',
+      'ValorAuxTransporte',
+      'PorcentajeARL'
+    ];
+    
+    return disabledCodes.includes(row.parameterCode);
   }
 
   onSaveClick() {

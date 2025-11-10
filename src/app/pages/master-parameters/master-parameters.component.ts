@@ -123,13 +123,30 @@ export class MasterParametersComponent implements OnInit {
   applyFilters() {
     const codeFilter = this.codeControl.value?.toLowerCase() || '';
     
+    let filtered: MasterParameter[];
     if (!codeFilter) {
-      this.filteredParameters = [...this.allParameters];
+      filtered = [...this.allParameters];
     } else {
-      this.filteredParameters = this.allParameters.filter(param =>
+      filtered = this.allParameters.filter(param =>
         param.code.toLowerCase().includes(codeFilter)
       );
     }
+    
+    // Ordenar por Nivel Inconsistencia: General, Cliente, Empleado
+    this.filteredParameters = filtered.sort((a, b) => {
+      return this.getOrdenNivelInconsistencia(a.inconsistencyLevelDescription) - 
+             this.getOrdenNivelInconsistencia(b.inconsistencyLevelDescription);
+    });
+  }
+
+  private getOrdenNivelInconsistencia(nivel: string): number {
+    const nivelLower = nivel?.toLowerCase() || '';
+    
+    if (nivelLower.includes('general')) return 1;
+    if (nivelLower.includes('cliente')) return 2;
+    if (nivelLower.includes('empleado')) return 3;
+    
+    return 4; // Cualquier otro valor al final
   }
 
   search() {
