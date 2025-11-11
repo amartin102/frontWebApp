@@ -279,11 +279,18 @@
         
         <ng-template pTemplate="header">
           <tr>
+            <th style="width: 50px;" class="text-center">PDF</th>
             <th>Empleado</th>
             <th>Identificación</th>
-            <th class="text-right">Salario Base</th>
+            <!--<th class="text-right">Salario Base</th>-->
             <th class="text-right">Devengos</th>
+            <th class="text-right">Adiciones</th>
             <th class="text-right">Deducciones</th>
+            <th class="text-center">Días Trab.</th>
+            <th class="text-center">Horas Trab.</th>
+            <th class="text-center">Horas Extra</th>
+            <th class="text-right">Salud</th>
+            <th class="text-right">Pensión</th>
             <th class="text-right">Total a Pagar</th>
             <th>Novedades</th>
             <th class="text-center">Estado</th>
@@ -292,11 +299,27 @@
 
         <ng-template pTemplate="body" let-item>
           <tr>
+            <td class="text-center">
+              <button 
+                pButton 
+                type="button"
+                icon="pi pi-file-pdf" 
+                class="p-button-rounded p-button-danger p-button-text p-button-sm"
+                (click)="generarColillaPDF(item)"
+                pTooltip="Descargar colilla de nómina">
+              </button>
+            </td>
             <td>{{item.empleadoNombre}}</td>
             <td>{{item.identificacion}}</td>
-            <td class="text-right">{{item.salarioBase | currency:'COP':'symbol-narrow':'1.0-0'}}</td>
+            <!--<td class="text-right">{{item.salarioBase | currency:'COP':'symbol-narrow':'1.0-0'}}</td>-->
             <td class="text-right">{{item.devengos | currency:'COP':'symbol-narrow':'1.0-0'}}</td>
+            <td class="text-right">{{item.adiciones | currency:'COP':'symbol-narrow':'1.0-0'}}</td>
             <td class="text-right">{{item.deducciones | currency:'COP':'symbol-narrow':'1.0-0'}}</td>
+            <td class="text-center">{{item.diasTrabajados}}</td>
+            <td class="text-center">{{item.totalHorasTrabajadas | number:'1.2-2'}}</td>
+            <td class="text-center">{{item.totalHorasExtras | number:'1.2-2'}}</td>
+            <td class="text-right">{{item.saludTrabajador | currency:'COP':'symbol-narrow':'1.0-0'}}</td>
+            <td class="text-right">{{item.pensionTrabajador | currency:'COP':'symbol-narrow':'1.0-0'}}</td>
             <td class="text-right">
               <strong>{{item.totalPagar | currency:'COP':'symbol-narrow':'1.0-0'}}</strong>
             </td>
@@ -312,7 +335,7 @@
 
         <ng-template pTemplate="emptymessage">
           <tr>
-            <td colspan="8" class="text-center">
+            <td colspan="15" class="text-center">
               No hay resultados del proceso
             </td>
           </tr>

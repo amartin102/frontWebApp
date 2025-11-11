@@ -24,6 +24,7 @@
     "@fullcalendar/interaction": "^6.1.19",
     "@fullcalendar/resource-timeline": "^6.1.19",
     "@fullcalendar/timegrid": "^6.1.19",
+    "jspdf": "^3.0.3",
     "primeflex": "^4.0.0",
     "primeicons": "^7.0.0",
     "primeng": "^17.18.15",

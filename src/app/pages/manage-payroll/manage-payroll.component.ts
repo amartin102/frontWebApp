@@ -16,7 +16,9 @@ import { ToastModule } from 'primeng/toast';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ProgressBarModule } from 'primeng/progressbar';
 import { TagModule } from 'primeng/tag';
+import { TooltipModule } from 'primeng/tooltip';
 import { MessageService, ConfirmationService } from 'primeng/api';
+import jsPDF from 'jspdf';
 
 interface Client {
   id: string;
@@ -85,10 +87,52 @@ interface ProcesoNominaResult {
   identificacion: string;
   salarioBase: number;
   devengos: number;
+  adiciones: number;
   deducciones: number;
+  diasTrabajados: number;
+  totalHorasTrabajadas: number;
+  totalHorasExtras: number;
+  saludTrabajador: number;
+  pensionTrabajador: number;
   totalPagar: number;
   novedades: string;
   estado: 'success' | 'warning' | 'error';
+}
+
+interface NominaCalculadaResponse {
+  intIdNomina: number;
+  strIdPeriodo_IdPeriodo: string | null;
+  identificadorPeriodo: string;
+  fechaInicioPeriodo: string;
+  fechaFinPeriodo: string;
+  nombreCliente: string;
+  strNit: string | null;
+  nitCliente: string;
+  strNombre: string | null;
+  nombreEmpleado: string;
+  strApellido: string | null;
+  apellidoEmpleado: string;
+  nombreCompletoEmpleado: string;
+  strIdentificacion: string | null;
+  identificacionEmpleado: string;
+  strIdentificador: string;
+  nombreEmpleadoNomina: string;
+  totalDevengadoPeriodo: number;
+  totalAdicionesPeriodo: number;
+  totalDeduccionesPeriodo: number;
+  totalNetoPeriodo: number;
+  diasTrabajados: number;
+  totalHorasTrabajadas: number;
+  totalHorasExtras: number;
+  totalCantidadAdiciones: number;
+  totalCantidadDeducciones: number;
+  saludTrabajador: number;
+  pensionTrabajador: number;
+  totalDeduccionesTrabajador: number;
+  salarioNetoFinal: number;
+  fechaCreacion: string;
+  strDescripcion: string | null;
+  descripcionPeriodo: string;
 }
 
 @Component({
@@ -111,7 +155,8 @@ interface ProcesoNominaResult {
     ToastModule,
     ConfirmDialogModule,
     ProgressBarModule,
-    TagModule
+    TagModule,
+    TooltipModule
   ],
   providers: [MessageService, ConfirmationService],
   templateUrl: './manage-payroll.component.html',
@@ -128,6 +173,7 @@ export class ManagePayrollComponent implements OnInit {
   private periodsUrl = `${this.baseApi}/MaestroPeriodo`;
   private novedadesUrl = `${this.baseApi}/RegistroNovedad`;
   private conceptosUrl = `${this.baseApi}/RegistroNovedad/concepts`;
+  private calcularNominaUrl = `${this.baseApi}/Nomina/CalcularNomina`;
 
   filterForm: FormGroup;
   novedadForm: FormGroup;
@@ -154,6 +200,7 @@ export class ManagePayrollComponent implements OnInit {
   procesoEnEjecucion = false;
   procesoProgress = 0;
   procesoResultados: ProcesoNominaResult[] = [];
+  nominaCalculadaData: NominaCalculadaResponse[] = []; // Datos completos del API
   
   // Resumen del proceso
   totalEmpleados = 0;
@@ -616,24 +663,73 @@ export class ManagePayrollComponent implements OnInit {
     this.procesoProgress = 0;
     this.procesoResultados = [];
 
-    // Simular proceso con datos dummy
-    const interval = setInterval(() => {
-      this.procesoProgress += 10;
-      
-      if (this.procesoProgress >= 100) {
-        clearInterval(interval);
+    // Construir la URL con los parámetros
+    const url = `${this.calcularNominaUrl}/${periodId}/${clientId}`;
+
+    console.log('🚀 Ejecutando cálculo de nómina:', { periodId, clientId, url });
+
+    // Simular progreso mientras se espera la respuesta
+    const progressInterval = setInterval(() => {
+      if (this.procesoProgress < 90) {
+        this.procesoProgress += 10;
+      }
+    }, 300);
+
+    // Consumir el endpoint
+    this.http.get<NominaCalculadaResponse[]>(url).subscribe({
+      next: (response) => {
+        clearInterval(progressInterval);
+        this.procesoProgress = 100;
         this.procesoEnEjecucion = false;
-        this.generarResultadosDummy();
+
+        console.log('✅ Respuesta del cálculo de nómina:', response);
+
+        // Guardar los datos completos del API para generar PDFs individuales
+        this.nominaCalculadaData = response;
+
+        // Transformar la respuesta al formato de resultados
+        this.procesoResultados = response.map(item => ({
+          empleadoId: item.strIdentificador,
+          empleadoNombre: item.nombreCompletoEmpleado,
+          identificacion: item.identificacionEmpleado,
+          salarioBase: item.totalDevengadoPeriodo - item.totalAdicionesPeriodo, // Aproximación
+          devengos: item.totalDevengadoPeriodo,
+          adiciones: item.totalAdicionesPeriodo,
+          deducciones: item.totalDeduccionesTrabajador,
+          diasTrabajados: item.diasTrabajados,
+          totalHorasTrabajadas: item.totalHorasTrabajadas,
+          totalHorasExtras: item.totalHorasExtras,
+          saludTrabajador: item.saludTrabajador,
+          pensionTrabajador: item.pensionTrabajador,
+          totalPagar: item.salarioNetoFinal,
+          novedades: `${item.totalCantidadAdiciones} Adiciones, ${item.totalCantidadDeducciones} Deducciones`,
+          estado: 'success' as const
+        }));
+
         this.calcularResumen();
-        
+
         this.messageService.add({
           severity: 'success',
           summary: 'Proceso Completado',
-          detail: `${this.selectedProceso === 'calculo' ? 'Cálculo' : 'Liquidación'} ejecutado correctamente`,
-          life: 3000
+          detail: `Cálculo de nómina ejecutado correctamente. ${response.length} empleado(s) procesado(s).`,
+          life: 5000
+        });
+      },
+      error: (error) => {
+        clearInterval(progressInterval);
+        this.procesoEnEjecucion = false;
+        this.procesoProgress = 0;
+
+        console.error('❌ Error al calcular nómina:', error);
+
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error en el Proceso',
+          detail: error.error?.message || 'Ocurrió un error al calcular la nómina. Verifique los datos e intente nuevamente.',
+          life: 5000
         });
       }
-    }, 300);
+    });
   }
 
   detenerProceso() {
@@ -657,7 +753,13 @@ export class ManagePayrollComponent implements OnInit {
         identificacion: '1234567890',
         salarioBase: 2500000,
         devengos: 2800000,
+        adiciones: 300000,
         deducciones: 450000,
+        diasTrabajados: 15,
+        totalHorasTrabajadas: 120,
+        totalHorasExtras: 10,
+        saludTrabajador: 100000,
+        pensionTrabajador: 100000,
         totalPagar: 2350000,
         novedades: '2 Bonificaciones, 1 Deducción',
         estado: 'success'
@@ -668,7 +770,13 @@ export class ManagePayrollComponent implements OnInit {
         identificacion: '0987654321',
         salarioBase: 3000000,
         devengos: 3200000,
+        adiciones: 200000,
         deducciones: 520000,
+        diasTrabajados: 15,
+        totalHorasTrabajadas: 120,
+        totalHorasExtras: 5,
+        saludTrabajador: 120000,
+        pensionTrabajador: 120000,
         totalPagar: 2680000,
         novedades: '1 Bonificación',
         estado: 'success'
@@ -679,7 +787,13 @@ export class ManagePayrollComponent implements OnInit {
         identificacion: '1122334455',
         salarioBase: 2200000,
         devengos: 2400000,
+        adiciones: 200000,
         deducciones: 380000,
+        diasTrabajados: 14,
+        totalHorasTrabajadas: 112,
+        totalHorasExtras: 8,
+        saludTrabajador: 88000,
+        pensionTrabajador: 88000,
         totalPagar: 2020000,
         novedades: 'Sin novedades',
         estado: 'warning'
@@ -690,7 +804,13 @@ export class ManagePayrollComponent implements OnInit {
         identificacion: '5544332211',
         salarioBase: 2800000,
         devengos: 0,
+        adiciones: 0,
         deducciones: 0,
+        diasTrabajados: 0,
+        totalHorasTrabajadas: 0,
+        totalHorasExtras: 0,
+        saludTrabajador: 0,
+        pensionTrabajador: 0,
         totalPagar: 0,
         novedades: 'Error: Datos incompletos',
         estado: 'error'
@@ -728,5 +848,200 @@ export class ManagePayrollComponent implements OnInit {
       default:
         return 'info';
     }
+  }
+
+  generarColillaPDF(item: ProcesoNominaResult) {
+    // Buscar los datos completos del empleado en la respuesta del API
+    const datosCompletos = this.nominaCalculadaData.find(
+      (n: NominaCalculadaResponse) => n.strIdentificador === item.empleadoId
+    );
+
+    if (!datosCompletos) {
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Error',
+        detail: 'No se encontraron los datos completos del empleado',
+        life: 3000
+      });
+      return;
+    }
+
+    // Importar jsPDF dinámicamente
+    import('jspdf').then((jsPDFModule) => {
+      const jsPDF = jsPDFModule.default;
+      const doc = new jsPDF();
+
+      // Configuración de colores
+      const azulSligo = [0, 150, 215];
+      const grisClaro = [240, 240, 240];
+      const grisMedio = [200, 200, 200];
+
+      // Header con fondo azul
+      doc.setFillColor(azulSligo[0], azulSligo[1], azulSligo[2]);
+      doc.rect(0, 0, 210, 40, 'F');
+      
+      // Logo de Empanadas (círculo amarillo con rojo)
+      // Círculo amarillo
+      doc.setFillColor(255, 223, 0);
+      doc.circle(25, 20, 12, 'F');
+      
+      // Borde rojo
+      doc.setDrawColor(220, 20, 60);
+      doc.setLineWidth(1.5);
+      doc.circle(25, 20, 12, 'S');
+      
+      // Texto del logo (simulado)
+      doc.setTextColor(220, 20, 60);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'bold');
+      doc.text('EMPANADAS', 25, 17, { align: 'center' });
+      doc.text('El Paradero', 25, 23, { align: 'center' });
+
+      // Información de la empresa (texto blanco)
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text(datosCompletos.nombreCliente.toUpperCase(), 105, 15, { align: 'center' });
+      doc.text(`Nit ${datosCompletos.nitCliente}`, 105, 21, { align: 'center' });
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(12);
+      doc.text('Documento soporte de pago nómina electrónica', 105, 30, { align: 'center' });
+
+      // Información del período y empleado
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(9);
+      
+      const yStart = 45;
+      doc.text(`Período de Pago: ${new Date(datosCompletos.fechaInicioPeriodo).toLocaleDateString()} - ${new Date(datosCompletos.fechaFinPeriodo).toLocaleDateString()}`, 15, yStart);
+      doc.text(`Comprobante Número: ${datosCompletos.intIdNomina}`, 150, yStart);
+      
+      doc.text(`Nombre: ${datosCompletos.nombreCompletoEmpleado.toUpperCase()}`, 15, yStart + 7);
+      doc.text(`Identificación: ${datosCompletos.identificacionEmpleado}`, 15, yStart + 14);
+      doc.text(`Cargo: Asistente Ventas`, 150, yStart + 14);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Salario básico: ${datosCompletos.totalDevengadoPeriodo.toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 2 })}`, 15, yStart + 21);
+
+      doc.text(`Fecha Generación: ${new Date().toLocaleDateString()}`, 150, yStart + 7);
+      doc.text(`Fecha Emisión: ${new Date(datosCompletos.fechaCreacion).toLocaleDateString()}`, 150, yStart + 21);
+
+      // Línea separadora
+      doc.setDrawColor(grisMedio[0], grisMedio[1], grisMedio[2]);
+      doc.line(15, yStart + 25, 195, yStart + 25);
+
+      // Sección INGRESOS Y DEDUCCIONES
+      const yTablas = yStart + 35;
+      
+      // INGRESOS (izquierda)
+      doc.setFillColor(grisClaro[0], grisClaro[1], grisClaro[2]);
+      doc.rect(15, yTablas, 85, 8, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.text('INGRESOS', 17, yTablas + 5);
+
+      // Headers de la tabla de ingresos
+      doc.setFontSize(8);
+      doc.text('Concepto', 17, yTablas + 12);
+      doc.text('Cantidad', 60, yTablas + 12, { align: 'right' });
+      doc.text('Valor', 98, yTablas + 12, { align: 'right' });
+
+      doc.setFont('helvetica', 'normal');
+      let yIngresos = yTablas + 18;
+
+      // Sueldo
+      doc.text('Sueldo', 17, yIngresos);
+      doc.text(datosCompletos.diasTrabajados.toFixed(2), 60, yIngresos, { align: 'right' });
+      doc.text(datosCompletos.totalDevengadoPeriodo.toLocaleString('es-CO', { style: 'currency', currency: 'COP' }), 98, yIngresos, { align: 'right' });
+      yIngresos += 6;
+
+      // Auxilio de Transporte (si aplica)
+      if (datosCompletos.totalAdicionesPeriodo > 0) {
+        doc.text('Auxilio de Transporte', 17, yIngresos);
+        doc.text(datosCompletos.diasTrabajados.toFixed(2), 60, yIngresos, { align: 'right' });
+        doc.text(datosCompletos.totalAdicionesPeriodo.toLocaleString('es-CO', { style: 'currency', currency: 'COP' }), 98, yIngresos, { align: 'right' });
+        yIngresos += 6;
+      }
+
+      // Horas extras si aplica
+      if (datosCompletos.totalHorasExtras > 0) {
+        doc.text('Horas Extras', 17, yIngresos);
+        doc.text(datosCompletos.totalHorasExtras.toFixed(2), 60, yIngresos, { align: 'right' });
+        doc.text('$ 0.00', 98, yIngresos, { align: 'right' });
+        yIngresos += 6;
+      }
+
+      // Total Ingresos
+      yIngresos += 3;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Total Ingresos', 17, yIngresos);
+      const totalIngresos = datosCompletos.totalDevengadoPeriodo + datosCompletos.totalAdicionesPeriodo;
+      doc.text(totalIngresos.toLocaleString('es-CO', { style: 'currency', currency: 'COP' }), 98, yIngresos, { align: 'right' });
+
+      // DEDUCCIONES (derecha)
+      doc.setFillColor(grisClaro[0], grisClaro[1], grisClaro[2]);
+      doc.rect(110, yTablas, 85, 8, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.text('DEDUCCIONES', 112, yTablas + 5);
+
+      // Headers de la tabla de deducciones
+      doc.setFontSize(8);
+      doc.text('Concepto', 112, yTablas + 12);
+      doc.text('Cantidad', 155, yTablas + 12, { align: 'right' });
+      doc.text('Valor', 193, yTablas + 12, { align: 'right' });
+
+      doc.setFont('helvetica', 'normal');
+      let yDeducciones = yTablas + 18;
+
+      // Fondo de Salud
+      doc.text('Fondo de Salud', 112, yDeducciones);
+      doc.text('1.00', 155, yDeducciones, { align: 'right' });
+      doc.text(datosCompletos.saludTrabajador.toLocaleString('es-CO', { style: 'currency', currency: 'COP' }), 193, yDeducciones, { align: 'right' });
+      yDeducciones += 6;
+
+      // Fondo de Pensión
+      doc.text('Fondo de Pensión', 112, yDeducciones);
+      doc.text('1.00', 155, yDeducciones, { align: 'right' });
+      doc.text(datosCompletos.pensionTrabajador.toLocaleString('es-CO', { style: 'currency', currency: 'COP' }), 193, yDeducciones, { align: 'right' });
+      yDeducciones += 6;
+
+      // Total Deducciones
+      yDeducciones += 3;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Total Deducciones', 112, yDeducciones);
+      doc.text(`-${datosCompletos.totalDeduccionesTrabajador.toLocaleString('es-CO', { style: 'currency', currency: 'COP' })}`, 193, yDeducciones, { align: 'right' });
+
+      // NETO A PAGAR (destacado)
+      const yNeto = Math.max(yIngresos, yDeducciones) + 15;
+      doc.setFillColor(grisClaro[0], grisClaro[1], grisClaro[2]);
+      doc.rect(110, yNeto, 85, 10, 'F');
+      
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text('NETO A PAGAR', 112, yNeto + 7);
+      doc.setFontSize(12);
+      doc.text(datosCompletos.salarioNetoFinal.toLocaleString('es-CO', { style: 'currency', currency: 'COP' }), 193, yNeto + 7, { align: 'right' });
+
+      // Medio de pago
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Medio de pago:', 15, yNeto + 7);
+
+      // Footer
+      doc.setFontSize(7);
+      doc.setTextColor(100, 100, 100);
+      doc.text('Este documento es un soporte de pago de nómina electrónica', 105, 280, { align: 'center' });
+
+      // Descargar el PDF
+      doc.save(`Colilla_${datosCompletos.nombreCompletoEmpleado.replace(/\s+/g, '_')}_${datosCompletos.identificadorPeriodo}.pdf`);
+
+      this.messageService.add({
+        severity: 'success',
+        summary: 'PDF Generado',
+        detail: `Colilla de nómina generada para ${datosCompletos.nombreCompletoEmpleado}`,
+        life: 3000
+      });
+    });
   }
 }
